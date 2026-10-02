@@ -1,0 +1,27 @@
+# Traducciones de motivo y afinidades entre necesidad y tipo de servicio.
+motivo_a_servicio:
+  academic_pressure: counseling # PROVISIONAL
+  sleep_and_routine: counseling # PROVISIONAL
+  social_support: peer_support # PROVISIONAL
+  career_concern: career_guidance # PROVISIONAL
+  preventive_guidance: counseling # PROVISIONAL
+  # Pendientes, comentados para no alterar los motivos activos del motor/agente.
+  service_navigation: peer_support # PROVISIONAL
+  # work_study_balance: counseling # PROVISIONAL: candidato, requiere decisión
+afinidad:
+  counseling:
+    counseling: 1.0 # PROVISIONAL
+    peer_support: 0.6 # PROVISIONAL
+    career_guidance: 0.3 # PROVISIONAL
+  peer_support:
+    peer_support: 1.0 # PROVISIONAL
+    counseling: 0.6 # PROVISIONAL
+    career_guidance: 0.4 # PROVISIONAL
+  career_guidance:
+    career_guidance: 1.0 # PROVISIONAL
+    counseling: 0.3 # PROVISIONAL
+    peer_support: 0.4 # PROVISIONAL
+canales:
+  digital: Digital
+  phone: Teléfono
+  in_person: Presencial

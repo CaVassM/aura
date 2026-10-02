@@ -1,0 +1,30 @@
+# Data Pack completo: solo se versionan D1, D2, D6 y D7 en data_pack/
+# (necesarios para el genético). D3, D4 y D5 y cualquier copia externa quedan fuera.
+D3_*
+D4_*
+D5_*
+DataPack_Aethera_Oleada1/
+../DataPack_Aethera_Oleada1/
+
+# Salidas: solo se suben .md y .png
+salidas/*
+!salidas/*.md
+!salidas/*.png
+
+# Notebooks
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
+
+# Entornos y caché
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secretos y editor
+.env
+.DS_Store
+.vscode/
+.idea/

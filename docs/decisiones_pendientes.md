@@ -1,0 +1,23 @@
+# Decisiones pendientes del equipo
+
+Los parámetros listados como **PROVISIONAL** son valores activos del prototipo, no recomendaciones definitivas. Los renglones comentados en YAML son candidatos de conversación: no están habilitados y no cambian el motor ni las herramientas.
+
+| Decisión | Valor actual | Alternativas para discutir | Qué cambiaría en los resultados | Fuente |
+|---|---|---|---|---|
+| Afinidad y umbral | Matriz 1,0 / 0,6 / 0,3; 0,6 / 1,0 / 0,4; 0,3 / 0,4 / 1,0. Corte **0,50**. | Revisar cada par con responsables de servicios; subir o bajar el corte después de validar pertinencia. | Cambia qué servicios alternativos pasan R2, el número de opciones, la espera y los desencuentros. | [tablas.yaml](../config/tablas.yaml), [parametros.yaml](../config/parametros.yaml) |
+| `academic_pressure` | counseling | Confirmar con orientación o elegir otro tipo existente. | Cambiaría el servicio ideal y la tasa de motivo coherente en D5. | [tablas.yaml](../config/tablas.yaml) |
+| `sleep_and_routine` | counseling | Confirmar o revisar con orientación. | Cambiaría candidatos y alternativas disponibles para esas solicitudes. | [tablas.yaml](../config/tablas.yaml) |
+| `social_support` | peer_support | Confirmar o revisar con orientación. | Cambiaría el tipo ideal y la elegibilidad de alternativas por afinidad. | [tablas.yaml](../config/tablas.yaml) |
+| `career_concern` | career_guidance | Confirmar o revisar con orientación. | Cambiaría qué cita cuenta como ideal frente a alternativa. | [tablas.yaml](../config/tablas.yaml) |
+| `preventive_guidance` | counseling | Confirmar; considerar derivación a orientación general o pares. | Cambiaría el servicio esperado para solicitudes preventivas; no aparece como motivo en D5 actual. | [tablas.yaml](../config/tablas.yaml), [baselines.py](../aura/motor/baselines.py) |
+| `service_navigation` | **peer_support**, marcado PROVISIONAL; aparece en **474** conversaciones D5. | Confirmar peer_support, elegir counseling o crear una ruta humana de orientación. | Cambiarlo altera qué tipo cuenta como ideal y qué alternativas pasan por afinidad; la tabla no es una validación clínica. | [reporte_comparacion_d5.md](../salidas/reporte_comparacion_d5.md), [tablas.yaml](../config/tablas.yaml) |
+| `work_study_balance` | Sin mapeo activo; D4 contiene **296** testimonios con ese tema. | counseling, career_guidance o revisar horarios/canales antes de mapear servicio. | Cambiaría la derivación para solicitudes que mencionan simultáneamente estudio y trabajo; no está en D5 como motivo actual. | [D4_testimonials.json](../../D4_testimonials.json), [tablas.yaml](../config/tablas.yaml) |
+| Fracción liberada | **0,50** de los cupos disponibles tras ocupación inicial. | Mantener el caso estándar o usar **0,25**, ya probado como escenario de escasez. | Menos cupos liberados reduce asignaciones y aumenta desencuentros; también redistribuye utilización. | [parametros.yaml](../config/parametros.yaml), [resumen_5_semillas.csv](../salidas/resumen_5_semillas.csv) |
+| Duración de sesión | **60 minutos**. | Revisar con operaciones y servicios usando su duración real. | Cambia cuántos bloques caben en horarios D6 y, por tanto, la oferta calculada. | [parametros.yaml](../config/parametros.yaml), [agenda.py](../aura/motor/agenda.py) |
+| Pesos de Z | Z1 **0,35**; Z2 **0,25**; Z3 **0,10**; Z4 **0,20**; Z5 **0,10**. | Dar más importancia a cobertura, espera, balance de servicio, equidad de grupos o afinidad según prioridad institucional; mantener suma normalizada. | Cambia el intercambio que el Genético acepta entre cobertura, espera, utilización, equidad y ajuste del servicio. | [parametros.yaml](../config/parametros.yaml), [reporte.md](../salidas/reporte.md) |
+| Beta del costo | **5,0**. | Revisar cuánto debe pesar afinidad frente a espera ajustada por canal. | Un beta mayor penaliza más las alternativas con menor afinidad; uno menor puede preferir citas más tempranas. | [parametros.yaml](../config/parametros.yaml), [costo.py](../aura/motor/costo.py) |
+| Umbral del modo lote | **70%** de utilización por servicio, como diseño futuro. | Definir si ese nivel activa lote, revisión humana o solo monitoreo; acordar dirección de la regla. | Afectaría cuándo se recalcula una asignación conjunta. Hoy no tiene efecto porque solo opera el modo directo. | [parametros.yaml](../config/parametros.yaml), [como_funciona.md](como_funciona.md) |
+
+## Propuesta de trabajo
+
+Primero acordar mapas de motivo y afinidad con orientación; después revisar el peso de equidad frente a cobertura con los resultados por semilla; finalmente especificar el disparador del modo lote. Hasta entonces, los parámetros marcados **PROVISIONAL** deben tratarse como supuestos de prototipo.
