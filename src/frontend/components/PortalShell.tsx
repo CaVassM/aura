@@ -21,7 +21,7 @@ export interface PortalShellProps {
   exitHref: string;
   exitLabel: string;
   title: string;
-  subtitle: string;
+  subtitle: ReactNode;
   topbarRight?: ReactNode;
   children: ReactNode;
 }
@@ -117,7 +117,7 @@ export default function PortalShell({
             <h1 className="truncate text-lg font-bold text-aura-navy">
               {title}
             </h1>
-            <p className="truncate text-sm text-aura-gray">{subtitle}</p>
+            <div className="text-sm leading-snug text-aura-gray">{subtitle}</div>
           </div>
           {topbarRight && (
             <div className="flex shrink-0 items-center gap-3">

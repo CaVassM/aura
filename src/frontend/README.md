@@ -6,6 +6,16 @@ con datos simulados (mock) para que lo puedas mostrar funcionando sin
 esperar al backend de Camilo; está armado para que conectar el backend real
 sea cambiar un solo archivo (`lib/api.ts`).
 
+> **Coordinación ya usa el backend real.** Las cuatro pantallas de `/coordinacion`
+> (Resumen, Mapa de servicios, Desencuentros y Reglas) leen de la API FastAPI de
+> `src/backend` a través de `lib/api.ts` (tipos en `lib/types-coordinacion.ts`).
+> Para verlas hay que levantar el backend (`uvicorn app.main:app --port 8080` en
+> `src/backend`) y definir `NEXT_PUBLIC_API_URL` en `.env.local`; si el backend no
+> responde, el panel muestra un mensaje de error con botón «Reintentar». El
+> contrato está en `src/backend/docs/api_coordinacion.md`. La vista del estudiante
+> (campus y chat) sigue con datos simulados; sus endpoints del backend usan
+> snake_case, así que habrá que adaptar `lib/api.ts` y `lib/types.ts` al conectarla.
+
 ## 1. Instalar y correr
 
 ```bash

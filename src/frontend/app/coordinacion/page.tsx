@@ -1,58 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Info, Sparkles } from "lucide-react";
-import PortalShell from "@/components/PortalShell";
-import { coordinacionBrand, coordinacionNav } from "@/components/coordinacion/nav";
+import Link from "next/link";
+import CoordinacionShell from "@/components/coordinacion/CoordinacionShell";
+import DemandaPorTipo from "@/components/coordinacion/resumen/DemandaPorTipo";
+import GraficoOcupacion from "@/components/coordinacion/resumen/GraficoOcupacion";
+import { useApi } from "@/components/coordinacion/useApi";
 import StatCard from "@/components/ui/StatCard";
-import { getNetworkSummary } from "@/lib/api";
-import { NetworkSummary } from "@/lib/types";
-
-function levelOf(pct: number): "green" | "yellow" | "red" {
-  if (pct > 70) return "red";
-  if (pct >= 50) return "yellow";
-  return "green";
-}
-const BAR_COLOR = {
-  green: "bg-aura-chart-green",
-  yellow: "bg-aura-chart-yellow",
-  red: "bg-aura-chart-red",
-} as const;
+import { EstadoCarga, EstadoError } from "@/components/ui/Estados";
+import { getResumen } from "@/lib/api";
+import { fechaCorta, num, pct } from "@/lib/format";
 
 export default function CoordinacionResumenPage() {
-  const [summary, setSummary] = useState<NetworkSummary | null>(null);
-
-  useEffect(() => {
-    getNetworkSummary().then(setSummary);
-  }, []);
+  const { data: resumen, error, cargando, reintentar } = useApi(
+    () => getResumen(),
+    [],
+  );
 
   return (
-    <PortalShell
-      brandIcon={coordinacionBrand.icon}
-      brandIconBg={coordinacionBrand.iconBg}
-      brandName={coordinacionBrand.name}
-      brandSubtitle={coordinacionBrand.subtitle}
-      nav={coordinacionNav}
-      activeHref="/coordinacion"
-      exitHref="/"
-      exitLabel="Volver a AURA"
-      sidebarFooter={
-        <div className="flex items-start gap-2 rounded-xl bg-aura-teal-pale px-3 py-3 text-xs leading-relaxed text-aura-gray">
-          <Info size={14} className="mt-0.5 shrink-0 text-aura-teal" />
-          AURA solo asigna sobre cupos liberados. Este panel no permite
-          asignaciones manuales.
-        </div>
-      }
-      title="Red de Bienestar Aethera · Coordinación"
-      subtitle="Semana del 5 al 10 de octubre de 2026 · Datos sintéticos"
-      topbarRight={
-        <span className="flex items-center gap-1.5 text-base font-extrabold text-aura-navy">
-          <Sparkles size={16} className="text-aura-teal" />
-          AURA
-        </span>
-      }
-    >
-      <div className="mx-auto max-w-5xl space-y-6 px-8 py-8">
+    <CoordinacionShell activeHref="/coordinacion">
+      <div className="mx-auto max-w-6xl space-y-6 px-8 py-8">
         <div>
           <p className="text-xs font-bold tracking-wide text-aura-teal">
             RESUMEN DE RED
@@ -66,89 +32,68 @@ export default function CoordinacionResumenPage() {
           </p>
         </div>
 
-        {summary && (
+        {error ? (
+          <EstadoError error={error} onRetry={reintentar} />
+        ) : !resumen ? (
+          cargando && <EstadoCarga />
+        ) : (
           <>
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
               <StatCard
-                label="Citas agendadas esta semana"
-                value={String(summary.citasAgendadas)}
-                tagText="Sobre cupos liberados"
+                label="Citas agendadas en la semana"
+                value={num(resumen.kpis.citas_agendadas, 0)}
+                tagText={`Pedidos del ${fechaCorta(resumen.pedidos.desde)} al ${fechaCorta(resumen.pedidos.hasta)}`}
                 tagVariant="green"
               />
               <StatCard
                 label="Espera media"
-                value={`${summary.esperaMediaDias} días`}
-                tagText={`Antes: ${summary.esperaMediaAntes} días`}
+                value={`${num(resumen.kpis.espera_media_dias)} días`}
+                tagText={`Antes: ${num(resumen.kpis.espera_linea_base_dias, 0)} días (D2)`}
                 tagVariant="purple"
               />
               <StatCard
                 label="Ocupación de cupos liberados (%)"
-                value={`${summary.ocupacionPct}%`}
-                tagText={`${summary.cuposLiberados} cupos liberados`}
+                value={pct(resumen.kpis.ocupacion_pct)}
+                tagText={`${num(resumen.kpis.cupos_ocupados, 0)} de ${num(resumen.kpis.cupos_liberados, 0)} cupos liberados`}
                 tagVariant="yellow"
               />
               <StatCard
                 label="Desencuentros registrados"
-                value={String(summary.desencuentros)}
+                value={num(resumen.kpis.desencuentros, 0)}
                 tagText="Disponibilidad no compatible"
                 tagVariant="red"
               />
+              <StatCard
+                label="Atendidos con alternativa afín"
+                value={num(resumen.kpis.atendidos_alternativa, 0)}
+                tagText="Pedidos desviados a otro tipo"
+                tagVariant="purple"
+              />
             </div>
 
-            <div className="rounded-xl2 border border-aura-border bg-white p-6 shadow-card">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-base font-bold text-aura-navy">
-                    Ocupación de cupos liberados
-                  </p>
-                  <p className="text-sm text-aura-gray">
-                    Por servicio · semana del 5 al 10 de octubre
-                  </p>
-                </div>
-                <div className="flex items-center gap-4 text-xs text-aura-gray">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-aura-chart-green" />
-                    Baja &lt; 50%
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-aura-chart-yellow" />
-                    Media 50–70%
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-aura-chart-red" />
-                    Alta &gt; 70%
-                  </span>
-                </div>
-              </div>
+            <GraficoOcupacion resumen={resumen} />
 
-              <div className="mt-6 space-y-3 border-t border-aura-border pt-5">
-                {summary.servicios.map((s) => {
-                  const level = levelOf(s.ocupacionPct);
-                  return (
-                    <div
-                      key={s.nombre}
-                      className="flex items-center gap-4 text-sm"
-                    >
-                      <span className="w-40 shrink-0 text-right text-aura-navy">
-                        {s.nombre}
-                      </span>
-                      <div className="h-3 flex-1 overflow-hidden rounded-full bg-aura-bg">
-                        <div
-                          className={`h-full rounded-full ${BAR_COLOR[level]}`}
-                          style={{ width: `${s.ocupacionPct}%` }}
-                        />
-                      </div>
-                      <span className="w-10 shrink-0 text-xs text-aura-gray">
-                        {s.ocupacionPct}%
-                      </span>
-                    </div>
-                  );
-                })}
+            <DemandaPorTipo demanda={resumen.demanda_por_tipo} />
+
+            <div className="flex flex-col gap-4 rounded-xl2 border border-aura-teal/15 bg-aura-teal-pale p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-bold text-aura-navy">Cobertura de la red</p>
+                <p className="mt-1 text-sm leading-6 text-aura-gray">
+                  {resumen.servicios.length} servicios en la red. Los datos
+                  sirven para observar la red; las asignaciones siguen siendo
+                  automáticas por AURA.
+                </p>
               </div>
+              <Link
+                href="/coordinacion/mapa"
+                className="shrink-0 rounded-xl border border-aura-teal px-4 py-2 text-center text-sm font-semibold text-aura-teal hover:bg-white"
+              >
+                Ver servicios en el mapa
+              </Link>
             </div>
           </>
         )}
       </div>
-    </PortalShell>
+    </CoordinacionShell>
   );
 }

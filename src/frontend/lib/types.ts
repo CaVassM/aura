@@ -1,5 +1,6 @@
 // Tipos del dominio AURA. Ajusta estos campos cuando Camilo y Leo
 // confirmen el contrato real del backend (ver README, sección "Endpoints").
+// Los tipos de la vista de Coordinación están en ./types-coordinacion.ts.
 
 export type Role = "user" | "agent";
 
@@ -35,19 +36,4 @@ export interface Appointment {
 export interface ChatResponse {
   reply: string;
   services?: ServiceOption[];
-}
-
-export interface ServiceOccupancy {
-  nombre: string;
-  ocupacionPct: number; // 0-100
-}
-
-export interface NetworkSummary {
-  citasAgendadas: number;
-  esperaMediaDias: number;
-  esperaMediaAntes: number;
-  ocupacionPct: number;
-  cuposLiberados: number;
-  desencuentros: number;
-  servicios: ServiceOccupancy[];
 }

@@ -15,10 +15,19 @@
 import {
   Appointment,
   ChatResponse,
-  NetworkSummary,
   ServiceOption,
   TimeSlot,
 } from "./types";
+import {
+  DesencuentrosRespuesta,
+  EstadoDemo,
+  FiltrosDesencuentros,
+  FiltrosServicios,
+  Reglas,
+  Resumen,
+  ServicioDetalle,
+  ServiciosGeoJSON,
+} from "./types-coordinacion";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -119,23 +128,97 @@ export function getMyAppointments(): Appointment[] {
   return raw ? JSON.parse(raw) : [];
 }
 
-/** Resumen de red para el panel de coordinación (Image 4). */
-export async function getNetworkSummary(): Promise<NetworkSummary> {
-  await delay(300);
-  return {
-    citasAgendadas: 185,
-    esperaMediaDias: 9,
-    esperaMediaAntes: 42,
-    ocupacionPct: 47,
-    cuposLiberados: 390,
-    desencuentros: 25,
-    servicios: [
-      { nombre: "Consejería Norte", ocupacionPct: 44 },
-      { nombre: "Consejería Parque", ocupacionPct: 79 },
-      { nombre: "Consejería Horizonte", ocupacionPct: 24 },
-      { nombre: "Consejería Río Claro", ocupacionPct: 86 },
-      { nombre: "Consejería Mirador", ocupacionPct: 38 },
-      { nombre: "Orientación Alba", ocupacionPct: 35 },
-    ],
-  };
+// ---------------------------------------------------------------------------
+// Coordinación: datos reales del backend (FastAPI). Ningún componente hace fetch directo.
+// ---------------------------------------------------------------------------
+
+export const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+).replace(/\/$/, "");
+
+/** Error de la API. `sinConexion` es true cuando el backend no respondió. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly sinConexion: boolean,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
 }
+
+type Params = Record<string, string | number | boolean | undefined | null>;
+
+function consulta(params?: Params): string {
+  const q = new URLSearchParams();
+  Object.entries(params ?? {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "" && v !== false)
+      q.set(k, String(v));
+  });
+  const texto = q.toString();
+  return texto ? `?${texto}` : "";
+}
+
+async function request<T>(
+  path: string,
+  params?: Params,
+  init?: RequestInit,
+): Promise<T> {
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(`${API_BASE_URL}${path}${consulta(params)}`, init);
+  } catch {
+    throw new ApiError(
+      `No se pudo conectar con el backend en ${API_BASE_URL}.`,
+      true,
+    );
+  }
+  if (!respuesta.ok) {
+    let detalle = "";
+    try {
+      const cuerpo = await respuesta.json();
+      detalle = cuerpo.detalle || cuerpo.error || "";
+    } catch {
+      /* respuesta sin JSON */
+    }
+    throw new ApiError(
+      `El backend respondió ${respuesta.status}${detalle ? `: ${detalle}` : ""}.`,
+      false,
+      respuesta.status,
+    );
+  }
+  return respuesta.json() as Promise<T>;
+}
+
+export const getDemoEstado = () => request<EstadoDemo>("/api/demo/estado");
+
+export const reiniciarDemo = () =>
+  request<EstadoDemo>("/api/demo/reiniciar", undefined, { method: "POST" });
+
+export const getResumen = (semana?: string) =>
+  request<Resumen>("/api/coordinacion/resumen", { semana });
+
+export const getServicios = (filtros: FiltrosServicios = {}) =>
+  request<ServiciosGeoJSON>("/api/coordinacion/servicios", { ...filtros });
+
+export const getServicioDetalle = (serviceId: string) =>
+  request<ServicioDetalle>(
+    `/api/coordinacion/servicios/${encodeURIComponent(serviceId)}`,
+  );
+
+export const getDesencuentros = (
+  filtros: FiltrosDesencuentros = {},
+  pagina = 1,
+  tamano = 8,
+) =>
+  request<DesencuentrosRespuesta>("/api/coordinacion/desencuentros", {
+    ...filtros,
+    pagina,
+    tamano,
+  });
+
+/** URL de descarga del CSV con los mismos filtros (el navegador lo descarga directo). */
+export const urlDesencuentrosCsv = (filtros: FiltrosDesencuentros = {}) =>
+  `${API_BASE_URL}/api/coordinacion/desencuentros.csv${consulta({ ...filtros })}`;
+
+export const getReglas = () => request<Reglas>("/api/coordinacion/reglas");
