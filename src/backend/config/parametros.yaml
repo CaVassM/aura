@@ -1,0 +1,74 @@
+# Parámetros centrales: rutas y reglas pueden cambiarse sin editar el código.
+data_pack_path: data_pack  # D1, D2, D6, D7 incluidos; AURA_DATA_DIR lo sobrescribe
+d5_path: ../../../D5_help_line_conversations.json
+hoy: '2026-10-01'  # solo experimentos y tests; la API usa demo.hoy
+horizonte_semanas: 2
+duracion_sesion_minutos: 60 # PROVISIONAL: tamaño actual del bloque de cita
+fraccion_liberada: 0.50 # PROVISIONAL: política de liberación para el prototipo
+ocupacion_inicial: 0.10
+beta: 5.0
+umbral_afinidad: 0.50 # PROVISIONAL: mínimo para aceptar un servicio alternativo
+modo_lote_umbral_utilizacion: 0.70 # PROVISIONAL: diseño futuro; no se usa en el modo directo
+experimento:
+  poblacion: 50
+  workers: 5
+  semillas: [42, 43, 44, 45, 46]
+  escenarios:
+    - {nombre: x1, factor: 1.0, fraccion_liberada: 0.50, generaciones: 200}
+    - {nombre: x2, factor: 2.0, fraccion_liberada: 0.50, generaciones: 200}
+    - {nombre: x4.3, factor: 4.3, fraccion_liberada: 0.50, generaciones: 200}
+    - {nombre: x6, factor: 6.0, fraccion_liberada: 0.50, generaciones: 500}
+    - {nombre: x8, factor: 8.0, fraccion_liberada: 0.50, generaciones: 500}
+    - {nombre: x4.3_lib25, factor: 4.3, fraccion_liberada: 0.25, generaciones: 500}
+pesos_z:
+  Z1: 0.35 # PROVISIONAL
+  Z2: 0.25 # PROVISIONAL
+  Z3: 0.10 # PROVISIONAL
+  Z4: 0.20 # PROVISIONAL
+  Z5: 0.10 # PROVISIONAL
+probabilidad_canal:
+  digital: 0.725
+  phone: 0.707
+  in_person: 0.667
+aviso:
+  dropout_alert: [medium, high]
+  caida_asistencia: 0.05
+  cambio_nota: -0.5
+  percentil_carga_creditos: 0.75
+  puntaje_minimo: 3
+  evento_evaluacion: evaluation_week
+
+# Demo de la API (vista de Coordinación). Todo es simulación, no dato observado.
+demo:
+  hoy: '2026-11-15' # domingo, último día de la semana de evaluaciones de D7 (9–15 nov); todo lo sembrado queda en el pasado o en hoy
+  escenario: x6 # nombre en experimento.escenarios (x1, x2, x4.3, x6, x8, x4.3_lib25)
+  semilla: 42
+  etiqueta_escenario: "Simulación · semana de parciales con aviso activo (demanda ×{factor})"
+  etiquetas_por_escenario: # texto propio de un escenario; los demás usan etiqueta_escenario
+    x6: "Simulación · escenario de estrés en semana de evaluaciones (demanda ×{factor})"
+  etiqueta_vespertino: " · {pct} % vespertinos que trabajan"
+  # SUPUESTO DE SIMULACIÓN, no dato observado: en D5 los vespertinos que trabajan son
+  # 55/2500 = 2,2 %. Se usa 10 % para que la demo muestre desencuentros reales del motor.
+  # Proporción sobre el total de solicitudes; 0 desactiva estas solicitudes extra.
+  proporcion_vespertino_trabaja: 0.10
+  # Espera = fecha_cupo − fecha_solicitud, la misma definición que wait_days en D2; por eso se
+  # compara con esta línea base. Los pedidos en vivo usan hoy como fecha de solicitud.
+  espera_linea_base_dias: 41.96 # media de wait_days en D2; se usa si D2 no está disponible
+
+# Definiciones del panel de coordinación (las implementa app/services/ocupacion.py).
+#  - Agenda: del día siguiente al primer pedido hasta hoy + horizonte_semanas × 7 días.
+#    La capacidad semanal de D6 se reparte por semana Lun–Dom; una semana cortada por el inicio o
+#    el fin recibe capacidad proporcional a los días de atención que caen dentro del rango.
+#  - Agenda abierta: de hoy + 1 al fin de la agenda (lo que todavía se puede reservar).
+#  - Cupos liberados, cupos ocupados y ocupación (= ocupados / liberados × 100): solo sobre la
+#    agenda abierta; los cupos libres de días pasados no cuentan porque ya no se pueden usar.
+#  - Citas agendadas, espera media y desencuentros: todo lo sembrado en la semana de pedidos.
+#  - Espera = fecha_cupo − fecha_solicitud (como wait_days en D2).
+#  - Ventana de cada pedido: de su fecha de solicitud + 1 a su fecha + horizonte_semanas × 7 días.
+coordinacion:
+  nivel_ocupacion: # ocupación = cupos ocupados / cupos liberados (%)
+    baja_menor_que: 50 # baja: < 50
+    alta_mayor_que: 70 # media: 50–70, alta: > 70
+  dias_heatmap: 6 # Lun–Sáb (primeros N días de etiquetas.dias_semana)
+  desencuentros_recientes: 5 # cuántos se muestran en el detalle de un servicio
+  horas_heatmap: [9, 20] # primera y última hora (inclusive) del heatmap de desencuentros

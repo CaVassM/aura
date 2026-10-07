@@ -55,6 +55,7 @@ class Solicitud:
     canales_aceptables: tuple[str, ...]
     fecha_solicitud: date
     grupo: str
+    motivo: str = ""
 
 
 @dataclass(frozen=True)

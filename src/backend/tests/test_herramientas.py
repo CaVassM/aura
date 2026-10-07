@@ -1,14 +1,11 @@
-"""Pruebas de persistencia, disponibilidad y reglas en las herramientas del agente."""
+"""Pruebas de disponibilidad, estado en RAM y reglas en las herramientas del agente."""
 
-import tempfile
 import unittest
 import json
-from datetime import date, time
-from pathlib import Path
+from datetime import timedelta
 
 from aura.herramientas.estado_agenda import AgendaViva
-from aura.herramientas import herramientas as herramientas_api
-from aura.herramientas.herramientas import proponer_opciones
+from aura.herramientas.herramientas import HerramientasAgente
 from aura.herramientas.esquemas import esquemas_herramientas
 from aura.motor.reglas import afinidad
 
@@ -29,22 +26,17 @@ class HerramientasTests(unittest.TestCase):
     """Comprueba los efectos de reservar y cancelar sobre la agenda viva."""
 
     def setUp(self):
-        self.temporal = tempfile.TemporaryDirectory()
-        self.agenda = AgendaViva(ruta_estado=Path(self.temporal.name) / "agenda.json")
-        herramientas_api._AGENDA = self.agenda
+        self.agenda = AgendaViva()
+        self.herramientas = HerramientasAgente(self.agenda)
         self.solicitud = solicitud_diurna()
-        self.propuestas = proponer_opciones(self.solicitud, 3)
+        self.propuestas = self.herramientas.proponer_opciones(self.solicitud, 3)
         self.assertTrue(self.propuestas["opciones"])
-
-    def tearDown(self):
-        herramientas_api._AGENDA = None
-        self.temporal.cleanup()
 
     def test_reserva_duplicada_falla(self):
         """Una misma opción solo puede ser tomada por la primera solicitud."""
         opcion = self.propuestas["opciones"][0]["opcion_id"]
         self.assertTrue(self.agenda.reservar("A", opcion)["ok"])
-        opciones_nuevas = proponer_opciones(self.solicitud, 20)["opciones"]
+        opciones_nuevas = self.herramientas.proponer_opciones(self.solicitud, 20)["opciones"]
         self.assertNotIn(opcion, {fila["opcion_id"] for fila in opciones_nuevas})
         resultado = self.agenda.reservar("B", opcion)
         self.assertEqual(resultado, {"ok": False, "error": "cupo_ya_tomado"})
@@ -72,15 +64,22 @@ class HerramientasTests(unittest.TestCase):
         segunda = self.agenda.reservar("B", opcion)
         self.assertTrue(segunda["ok"])
 
-    def test_reserva_se_conserva_tras_reiniciar_agenda(self):
-        """El estado JSON evita que una cita viva vuelva a ofrecerse al reiniciar."""
+    def test_estado_vive_solo_en_ram(self):
+        """Una agenda nueva no hereda reservas ni desencuentros de otra instancia."""
         opcion = self.propuestas["opciones"][0]["opcion_id"]
         self.assertTrue(self.agenda.reservar("A", opcion)["ok"])
-        recargada = AgendaViva(ruta_estado=self.agenda.ruta_estado)
-        self.assertIn(opcion.split("|")[0], recargada.cupos_ocupados())
-        self.assertEqual(
-            recargada.reservar("B", opcion), {"ok": False, "error": "cupo_ya_tomado"}
-        )
+        registro = self.herramientas.registrar_desencuentro(self.solicitud)
+        self.assertEqual(registro["registro_id"], "DES-0000001")
+        nueva = AgendaViva()
+        self.assertEqual(nueva.reservas, {})
+        self.assertEqual(nueva.desencuentros, [])
+
+    def test_ejecutar_despacha_por_nombre_y_rechaza_desconocidas(self):
+        """El despachador de tool calling devuelve JSON también ante errores."""
+        resultado = self.herramientas.ejecutar("proponer_opciones", {"solicitud": self.solicitud, "k": 1})
+        self.assertEqual(len(resultado["opciones"]), 1)
+        self.assertEqual(self.herramientas.ejecutar("borrar_todo", {})["error"], "herramienta_desconocida")
+        self.assertEqual(self.herramientas.ejecutar("reservar", {"x": 1})["error"], "argumentos_invalidos")
 
     def test_opciones_propuestas_respetan_reglas_y_disponibilidad(self):
         """Las propuestas deben ser libres, futuras, horarias y afines."""
@@ -117,14 +116,31 @@ class HerramientasTests(unittest.TestCase):
             "franjas": [{"dia": "Tue", "desde": "19:00", "hasta": "21:00"}],
             "canales_aceptables": ["phone"],
         }
-        opciones = proponer_opciones(solicitud, 5)["opciones"]
+        opciones = self.herramientas.proponer_opciones(solicitud, 5)["opciones"]
         self.assertTrue(not opciones or all(o["es_alternativa"] for o in opciones))
         self.assertTrue(all(o["afinidad"] >= 0.5 for o in opciones))
 
-    def _modelo_solicitud(self):
-        from aura.herramientas.herramientas import _convertir_solicitud
+    def test_la_ventana_de_una_solicitud_va_de_su_fecha_mas_1_a_mas_14_dias(self):
+        """Con referencia anterior a hoy, los cupos fuera de [ref+1, ref+14] no son opciones."""
+        modelo = self._modelo_solicitud()
+        referencia = self.agenda.hoy - timedelta(days=5)
+        opciones = self.agenda.opciones_validas(modelo, referencia)
+        fechas = [self.agenda.cupo_por_id[o.cupo_id].fecha for o in opciones]
+        self.assertTrue(fechas)
+        self.assertGreater(min(fechas), referencia)
+        self.assertLessEqual(max(fechas), referencia + timedelta(days=14))
+        self.assertLess(max(fechas), max(c.fecha for c in self.agenda.cupos))  # había cupos más lejanos
 
-        return _convertir_solicitud(self.solicitud)[0]
+    def test_reservar_fuera_de_la_ventana_falla(self):
+        opcion = self.propuestas["opciones"][0]["opcion_id"]
+        lejana = self.agenda.hoy - timedelta(days=30)
+        self.assertEqual(
+            self.agenda.reservar("A", opcion, lejana), {"ok": False, "error": "cupo_fuera_de_ventana"}
+        )
+        self.assertTrue(self.agenda.reservar("A", opcion)["ok"])
+
+    def _modelo_solicitud(self):
+        return self.herramientas.convertir_solicitud(self.solicitud)[0]
 
 
 if __name__ == "__main__":

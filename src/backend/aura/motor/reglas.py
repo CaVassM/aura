@@ -1,6 +1,6 @@
 """Compatibilidad, afinidad y precálculo de opciones válidas."""
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 import yaml
 from .datos import Cupo, Solicitud, Opcion
@@ -28,8 +28,13 @@ def precalcular_opciones(
     libres: set[str],
     hoy: date,
     beta: float = BETA_COSTO,
+    horizonte_dias: int | None = None,
 ):
-    """Evalúa R1-R6 una sola vez y regresa opciones por solicitud."""
+    """Evalúa R1-R6 una sola vez y regresa opciones por solicitud.
+
+    `hoy` es la fecha de referencia. Si se indica `horizonte_dias`, la ventana de la solicitud
+    es de hoy + 1 a hoy + horizonte_dias; si no, no hay cota superior.
+    """
     por_solicitud = {}
     cupo_por_id = {c.id: c for c in cupos}
     for s in solicitudes:
@@ -37,6 +42,8 @@ def precalcular_opciones(
         for c in cupos:
             if c.id not in libres or c.fecha <= hoy:
                 continue  # R5 y disponibilidad
+            if horizonte_dias is not None and c.fecha > hoy + timedelta(days=horizonte_dias):
+                continue  # fuera de la ventana de la solicitud
             if not any(
                 f.dia_semana == c.fecha.weekday()
                 and f.hora_inicio <= c.hora_inicio

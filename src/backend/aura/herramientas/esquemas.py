@@ -69,7 +69,14 @@ def esquemas_herramientas() -> list[dict]:
         _herramienta(
             "reservar",
             "Reserva una opción si su cupo sigue libre.",
-            {"estudiante_id": {"type": "string"}, "opcion_id": {"type": "string"}},
+            {
+                "estudiante_id": {"type": "string"},
+                "opcion_id": {"type": "string"},
+                "servicio_ideal": {
+                    "type": "string",
+                    "description": "Opcional: el servicio_ideal de la propuesta elegida",
+                },
+            },
             ["estudiante_id", "opcion_id"],
         ),
         _herramienta(

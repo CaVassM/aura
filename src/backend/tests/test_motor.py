@@ -137,3 +137,33 @@ class MotorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AgendaCalendarioTests(unittest.TestCase):
+    """La capacidad semanal se reparte por semana Lun-Dom, proporcional si la semana queda cortada."""
+
+    def setUp(self):
+        from datetime import date, time
+        from aura.motor.agenda import generar_agenda
+
+        # Atiende de lunes a viernes, capacidad 50 por semana.
+        horario = tuple((d, time(9), time(18)) for d in range(5))
+        servicio = Servicio("S1", "counseling", "D1", horario, 50, ("digital",))
+        # Rango: martes 10 a domingo 29 de noviembre de 2026 (semanas 9-15 cortada, 16-22 y 23-29).
+        self.cupos, _ = generar_agenda(
+            [servicio], date(2026, 11, 15), fraccion_liberada=1.0, ocupacion_inicial=0.0,
+            primer_dia=date(2026, 11, 10), ultimo_dia=date(2026, 11, 29), semana_calendario=True,
+        )
+
+    def test_semana_cortada_recibe_capacidad_proporcional(self):
+        from datetime import date
+
+        por_semana = {}
+        for c in self.cupos:
+            lunes = c.fecha.toordinal() - c.fecha.weekday()
+            por_semana[lunes] = por_semana.get(lunes, 0) + 1
+        primera, segunda, tercera = (por_semana[k] for k in sorted(por_semana))
+        self.assertEqual((segunda, tercera), (50, 50))
+        self.assertEqual(primera, round(50 * 4 / 5))  # martes a viernes: 4 de 5 días de atención
+        self.assertEqual(min(c.fecha for c in self.cupos), date(2026, 11, 10))
+        self.assertEqual(max(c.fecha for c in self.cupos), date(2026, 11, 27))

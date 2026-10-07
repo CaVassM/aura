@@ -1,6 +1,6 @@
 # Contrato de herramientas AURA
 
-El agente conversacional detecta el motivo, reúne preferencias y llama las funciones normales de Python. Todas las respuestas son serializables a JSON. Los motivos y su servicio ideal salen de `config/tablas.yaml`.
+El agente conversacional detecta el motivo, reúne preferencias y llama las herramientas del motor a través de `aura.servicio.ServicioAsignacion` (`proponer_opciones`, `reservar`, `cancelar_cita`, `registrar_desencuentro`, o `ejecutar_herramienta(nombre, argumentos)` para despachar una llamada de tool calling tal como la emite el LLM). Todas las respuestas son serializables a JSON y el estado vive en RAM: se pierde al reiniciar el proceso. Los motivos y su servicio ideal salen de `config/tablas.yaml`.
 
 ## `proponer_opciones(solicitud, k=3)`
 
@@ -53,6 +53,6 @@ Entrada: `{"cita_id":"CITA-0000001"}`. Salida: `{"ok":true,"cita_id":"CITA-00000
 
 ## `registrar_desencuentro(solicitud)`
 
-Recibe la misma estructura que `proponer_opciones` y agrega servicio ideal, franjas, distrito, grupo y fecha a `salidas/desencuentros_vivos.csv`. Devuelve `{"ok":true,"registro_id":"DES-0000002"}`. El archivo se escribe como UTF-8.
+Recibe la misma estructura que `proponer_opciones` y guarda en RAM servicio ideal, franjas, distrito, grupo y fecha. Devuelve `{"ok":true,"registro_id":"DES-0000002"}`. Los registros se consultan con `ServicioAsignacion.desencuentros()`.
 
-Los esquemas listos para tool calling se obtienen con `esquemas_herramientas()` en `aura.herramientas.esquemas`.
+Los esquemas listos para tool calling se obtienen con `ServicioAsignacion.esquemas_herramientas()` (definidos en `aura.herramientas.esquemas`).

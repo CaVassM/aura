@@ -120,7 +120,14 @@ def simular_solicitudes(d2, d1, fecha_base, semilla=42):
         )
         solic.append(
             Solicitud(
-                f"DEMO_{i+1:04d}", ideal, distrito, franjas, canales, llegada, grupo
+                f"DEMO_{i+1:04d}",
+                ideal,
+                distrito,
+                franjas,
+                canales,
+                llegada,
+                grupo,
+                motivo,
             )
         )
     return solic, {
@@ -151,6 +158,7 @@ def escalar_demanda(solicitudes, factor, semilla=42):
                     s.canales_aceptables,
                     s.fecha_solicitud,
                     s.grupo,
+                    s.motivo,
                 )
             )
     resto = round((factor - int(factor)) * len(solicitudes))
@@ -164,6 +172,7 @@ def escalar_demanda(solicitudes, factor, semilla=42):
                 s.canales_aceptables,
                 s.fecha_solicitud,
                 s.grupo,
+                s.motivo,
             )
         )
     return salida
