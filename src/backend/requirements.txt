@@ -1,0 +1,7 @@
+pyyaml
+numpy
+matplotlib   # solo para los gráficos de experimentos
+fastapi
+uvicorn
+httpx        # TestClient de FastAPI (tests)
+pytest
