@@ -7,9 +7,9 @@ DataPack_Aethera_Oleada1/
 ../DataPack_Aethera_Oleada1/
 
 # Salidas: solo se suben .md y .png
-salidas/*
-!salidas/*.md
-!salidas/*.png
+src/backend/salidas/*
+!src/backend/salidas/*.md
+!src/backend/salidas/*.png
 
 # Notebooks
 notebooks/
@@ -28,3 +28,7 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+
+# Material de referencia que no se sube al repo
+referencia_figma/
+Prototipo web AURA.zip
