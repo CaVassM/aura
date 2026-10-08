@@ -7,8 +7,10 @@ class Kpis(BaseModel):
     citas_agendadas: int
     espera_media_dias: float
     espera_linea_base_dias: float
-    cupos_liberados: int
-    cupos_ocupados: int
+    capacidad_agenda_abierta: int  # capacidad prorrateada a los días de la agenda abierta
+    libres_agenda_abierta: int  # después de la ocupación inicial
+    cupos_liberados: int  # los que los servicios prestan a AURA
+    cupos_reservados: int  # los que AURA ya asignó
     ocupacion_pct: float
     desencuentros: int
     atendidos_alternativa: int  # pedidos atendidos en un tipo distinto del ideal (por afinidad)
@@ -21,8 +23,11 @@ class ServicioResumen(BaseModel):
     tipo_label: str
     ocupacion_pct: float
     nivel: str
+    capacidad_semanal: int
+    capacidad_agenda_abierta: int
+    libres_agenda_abierta: int
     cupos_liberados: int
-    cupos_ocupados: int
+    cupos_reservados: int
 
 
 class Rango(BaseModel):
@@ -52,7 +57,7 @@ class RecibidosAlternativa(BaseModel):
 
 
 class ResumenOut(BaseModel):
-    agenda_abierta: Rango  # rango de cupos liberados / ocupados / ocupación
+    agenda_abierta: Rango  # rango del embudo de cupos y de la ocupación
     pedidos: Rango  # rango de pedidos que cuentan las citas y la espera
     kpis: Kpis
     demanda_por_tipo: list[DemandaTipo]
@@ -81,9 +86,11 @@ class ServicioProps(BaseModel):
     horario: list[HorarioTramo]
     canales: list[str]
     canales_label: list[str]
-    capacidad_semanal: int
+    capacidad_semanal: int  # D6
+    capacidad_agenda_abierta: int
+    libres_agenda_abierta: int
     cupos_liberados: int
-    cupos_ocupados: int
+    cupos_reservados: int
     ocupacion_pct: float
     nivel: str
     alta_demanda: bool
@@ -107,6 +114,8 @@ class ServiciosGeoJSON(BaseModel):
 class CuposDia(BaseModel):
     fecha: date
     dia: str
+    capacidad: int
+    libres: int
     liberados: int
-    ocupados: int
+    reservados: int
     abierto: bool  # el día todavía se puede reservar (posterior a hoy)

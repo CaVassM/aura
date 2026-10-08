@@ -59,24 +59,31 @@ etiquetas:
     media: Media
     alta: Alta
   dias_semana: [Lun, Mar, Mié, Jue, Vie, Sáb, Dom]
+  dias_semana_largo: [lunes, martes, miércoles, jueves, viernes, sábado, domingo]
   pesos:
     Z1: Estudiantes sin cita
     Z2: Espera ajustada por canal
     Z3: Equilibrio entre servicios
     Z4: Espera del grupo peor atendido
     Z5: Pérdida de afinidad
+  # Valores de los datos que se muestran al usuario (alerta de abandono: low/medium/high).
+  valores:
+    low: baja
+    medium: media
+    high: alta
   senales:
     S1:
       nombre: Alerta de abandono
-      descripcion: "La alerta de abandono (dropout_alert) es {umbral}."
+      descripcion: "La alerta de abandono es {umbral}."
     S2:
       nombre: Caída de asistencia
       descripcion: "La tasa de asistencia bajó al menos {umbral} frente al período anterior."
     S3:
       nombre: Caída de nota
-      descripcion: "El cambio de nota (grade_change) es menor o igual que {umbral}."
+      descripcion: "El cambio de nota es menor o igual que {umbral}."
     S4:
       nombre: Carga de créditos alta
       descripcion: "Los créditos están en el percentil {umbral} o más del período."
+  franja_principal: "entre {desde} y {hasta}, {dias}"
   insight: "{pct} % de los desencuentros son de {grupo} que buscan {servicio} entre las {desde} y las {hasta}."
   insight_vacio: "No hay desencuentros con estos filtros."

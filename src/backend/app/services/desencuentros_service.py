@@ -1,4 +1,4 @@
-"""Desencuentros: solicitudes que el motor no pudo atender, con filtros, heatmap e insight."""
+"""Desencuentros: solicitudes que el motor no pudo atender, con filtros, matriz distrito × servicio e insight."""
 
 import csv
 import io
@@ -12,11 +12,6 @@ COLUMNAS_CSV = [
     "id", "fecha", "motivo", "motivo_label", "servicio_ideal", "servicio_ideal_label",
     "distrito", "franja_dia", "franja_desde", "franja_hasta", "canales_aceptables", "grupo",
 ]  # fmt: skip
-
-
-def _minutos(hhmm: str) -> int:
-    horas, minutos = hhmm.split(":")
-    return int(horas) * 60 + int(minutos)
 
 
 class DesencuentrosService:
@@ -84,8 +79,12 @@ class DesencuentrosService:
             "pagina": pagina,
             "paginas": max(1, ceil(len(filtrados) / tamano)),
             "items": [self.item(r) for r in filtrados[inicio : inicio + tamano]],
-            "heatmap": self._heatmap(filtrados),
-            "insight": self._insight(filtrados),
+            "matriz_distrito_servicio": self._matriz(filtrados),
+            "franja_principal": self._franja_principal(filtrados),
+            "insight": self._insight(self._filtrar(None, None, None, None)),  # siempre sobre el total
+            "insight_filtro": (
+                self._insight(filtrados) if any((motivo, distrito, servicio_ideal, grupo)) else None
+            ),
         }
 
     def recientes(self, tipo: str, distrito: str) -> list[dict]:
@@ -119,23 +118,43 @@ class DesencuentrosService:
 
     # --- Agregados sobre el conjunto filtrado ---
 
-    def _heatmap(self, registros: list[dict]) -> dict:
-        """Cuenta, por día y hora, las solicitudes cuya franja cubre esa hora."""
-        cfg = self._estado.parametros["coordinacion"]
-        primera, ultima = cfg["horas_heatmap"]
-        horas = list(range(primera, ultima + 1))
-        dias = self._etiquetas.dias_semana[: cfg["dias_heatmap"]]
-        celdas = [[0] * len(horas) for _ in dias]
-        for registro in registros:
-            cubiertas = set()
-            for franja in registro["franjas"]:
-                desde, hasta = _minutos(franja["desde"]), _minutos(franja["hasta"])
-                for j, hora in enumerate(horas):
-                    if franja["dia_semana"] < len(dias) and desde < (hora + 1) * 60 and hasta > hora * 60:
-                        cubiertas.add((franja["dia_semana"], j))
-            for dia, j in cubiertas:
-                celdas[dia][j] += 1
-        return {"dias": dias, "horas": horas, "celdas": celdas}
+    def _matriz(self, registros: list[dict]) -> dict:
+        """Conteo de desencuentros por distrito (filas) y servicio ideal (columnas), con totales."""
+        distritos = sorted({s["distrito"] for s in self._estado.motor.servicios()})
+        tipos = list(self._estado.tablas["afinidad"])
+        cuenta = Counter((r["distrito"], r["servicio_ideal"]) for r in registros)
+        celdas = [[cuenta[(d, t)] for t in tipos] for d in distritos]
+        return {
+            "distritos": distritos,
+            "servicios": [{"tipo": t, "label": self._etiquetas.tipo(t)} for t in tipos],
+            "celdas": celdas,
+            "total_filas": [sum(fila) for fila in celdas],
+            "total_columnas": [sum(fila[j] for fila in celdas) for j in range(len(tipos))],
+            "total": sum(map(sum, celdas)),
+        }
+
+    def _franja_principal(self, registros: list[dict]) -> dict | None:
+        """La franja (horas y días) que más declaran los pedidos del conjunto, y qué porcentaje es."""
+        if not registros:
+            return None
+        cuenta = Counter()
+        for r in registros:
+            primera = r["franjas"][0]
+            dias = tuple(
+                f["dia_semana"]
+                for f in r["franjas"]
+                if (f["desde"], f["hasta"]) == (primera["desde"], primera["hasta"])
+            )
+            cuenta[(primera["desde"], primera["hasta"], dias)] += 1
+        (desde, hasta, dias), n = sorted(cuenta.items(), key=lambda kv: (-kv[1], kv[0]))[0]
+        dias_texto = self._etiquetas.dias_texto_largo(list(dias))
+        return {
+            "texto": self._etiquetas.franja_principal.format(desde=desde, hasta=hasta, dias=dias_texto),
+            "porcentaje": round(100 * n / len(registros), 1),
+            "desde": desde,
+            "hasta": hasta,
+            "dias": dias_texto,
+        }
 
     def _insight(self, registros: list[dict]) -> dict:
         """Combinación (grupo, servicio ideal, franja) más frecuente, en una frase."""

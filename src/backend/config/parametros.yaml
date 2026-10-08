@@ -69,6 +69,4 @@ coordinacion:
   nivel_ocupacion: # ocupación = cupos ocupados / cupos liberados (%)
     baja_menor_que: 50 # baja: < 50
     alta_mayor_que: 70 # media: 50–70, alta: > 70
-  dias_heatmap: 6 # Lun–Sáb (primeros N días de etiquetas.dias_semana)
   desencuentros_recientes: 5 # cuántos se muestran en el detalle de un servicio
-  horas_heatmap: [9, 20] # primera y última hora (inclusive) del heatmap de desencuentros

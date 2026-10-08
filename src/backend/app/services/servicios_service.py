@@ -8,7 +8,7 @@ from .demanda_service import DemandaService
 from .desencuentros_service import DesencuentrosService
 from .errors import NotFoundError
 from .etiquetas import Etiquetas
-from .ocupacion import nivel, ocupacion_por_servicio, porcentaje
+from .ocupacion import SIN_CUPOS, embudo_por_servicio, nivel, porcentaje
 
 
 class ServiciosService:
@@ -19,14 +19,14 @@ class ServiciosService:
     def _propiedades(self, semana: date | None) -> list[tuple[dict, dict]]:
         """(feature de D6, propiedades de la API) de cada servicio, en el orden de D6."""
         estado, et = self._estado, self._etiquetas
-        _, _, ocupacion = ocupacion_por_servicio(estado, semana)
+        _, _, ocupacion = embudo_por_servicio(estado, semana)
         motor = {s["service_id"]: s for s in estado.motor.servicios()}
         resultado = []
         for feature in estado.geo:
             s = motor[feature["service_id"]]
             d6 = feature["properties"]
-            fila = ocupacion.get(s["service_id"], {"liberados": 0, "ocupados": 0})
-            pct = porcentaje(fila["ocupados"], fila["liberados"])
+            fila = ocupacion.get(s["service_id"], SIN_CUPOS)
+            pct = porcentaje(fila["reservados"], fila["liberados"])
             nivel_ = nivel(estado, pct)
             propiedades = {
                 "service_id": s["service_id"],
@@ -40,8 +40,10 @@ class ServiciosService:
                 "canales": s["canales"],
                 "canales_label": [et.canal(c) for c in s["canales"]],
                 "capacidad_semanal": s["capacidad_semanal"],
+                "capacidad_agenda_abierta": fila["capacidad"],
+                "libres_agenda_abierta": fila["libres"],
                 "cupos_liberados": fila["liberados"],
-                "cupos_ocupados": fila["ocupados"],
+                "cupos_reservados": fila["reservados"],
                 "ocupacion_pct": pct,
                 "nivel": nivel_,
                 "alta_demanda": nivel_ == "alta",
@@ -52,7 +54,9 @@ class ServiciosService:
             resultado.append((feature, propiedades))
         return resultado
 
-    def geojson(self, tipo=None, canal=None, solo_alta_demanda=False, semana=None) -> dict:
+    def geojson(
+        self, tipo=None, canal=None, solo_alta_demanda=False, semana=None, distrito=None, nivel=None
+    ) -> dict:
         features = [
             {
                 "type": "Feature",
@@ -64,6 +68,8 @@ class ServiciosService:
             if (tipo is None or p["tipo"] == tipo)
             and (canal is None or canal in p["canales"])
             and (not solo_alta_demanda or p["alta_demanda"])
+            and (distrito is None or p["distrito"] == distrito)
+            and (nivel is None or p["nivel"] == nivel)
         ]
         return {"type": "FeatureCollection", "features": features}
 
@@ -73,10 +79,15 @@ class ServiciosService:
         )
         if encontrado is None:
             raise NotFoundError(service_id)
-        por_dia: dict[str, dict[str, int]] = defaultdict(lambda: {"liberados": 0, "ocupados": 0})
-        for cupo in self._estado.motor.cupos_liberados(service_id):
-            por_dia[cupo["fecha"]]["liberados"] += 1
-            por_dia[cupo["fecha"]]["ocupados"] += cupo["ocupado"]
+        por_dia: dict[str, dict[str, int]] = defaultdict(lambda: dict(SIN_CUPOS))
+        for cupo in self._estado.motor.inventario_cupos():
+            if cupo["service_id"] != service_id:
+                continue
+            fila = por_dia[cupo["fecha"]]
+            fila["capacidad"] += 1
+            fila["libres"] += not cupo["ocupado_inicial"]
+            fila["liberados"] += cupo["liberado"]
+            fila["reservados"] += cupo["reservado"]
         demanda = DemandaService(self._estado)
         citas = self._estado.motor.citas()
         del_servicio = [c for c in citas if c["service_id"] == service_id]

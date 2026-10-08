@@ -28,7 +28,7 @@ def test_reserva_por_la_capa_de_servicios_cambia_el_resumen(client_fresco, estad
     cita = servicio.reservar("STU_TEST_1", opcion["opcion_id"])
     despues = kpis(client_fresco)
     assert despues["citas_agendadas"] == antes["citas_agendadas"] + 1
-    assert despues["cupos_ocupados"] == antes["cupos_ocupados"] + 1
+    assert despues["cupos_reservados"] == antes["cupos_reservados"] + 1
     servicio.cancelar(cita.id)
     assert kpis(client_fresco) == antes
 
@@ -41,7 +41,7 @@ def test_pedidos_en_vivo_usan_hoy_como_referencia(client_fresco, estado_fresco):
     assert all(o["dias_espera"] == (date.fromisoformat(o["fecha"]) - hoy).days for o in propuesta["opciones"])
     # Un cupo libre de la semana ya sembrada (anterior o igual a hoy) no se puede reservar en vivo.
     pasado = next(
-        (c for c in estado_fresco.motor.cupos_liberados() if c["fecha"] <= hoy.isoformat() and not c["ocupado"]),
+        (c for c in estado_fresco.motor.cupos_liberados() if c["fecha"] <= hoy.isoformat() and not c["reservado"]),
         None,
     )
     if pasado:

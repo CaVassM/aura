@@ -21,4 +21,10 @@ class EstadoDemo(BaseModel):
     semilla: int
     factor_demanda: float
     proporcion_vespertino_trabaja: float
+    pedidos_desde: date  # rango de pedidos simulados
+    pedidos_hasta: date
+    agenda_abierta_semanas: int
+    ocupacion_inicial_pct: float  # % de cupos que el servicio ya tenía ocupados
+    fraccion_liberada_pct: float  # % de los cupos libres que presta a AURA
+    espera_linea_base_dias: float  # espera media observada en D2
     umbrales_nivel: UmbralesNivel

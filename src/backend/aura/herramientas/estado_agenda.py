@@ -46,6 +46,7 @@ class AgendaViva:
         self.agenda_desde = desde or self.hoy + timedelta(days=1)
         self.agenda_hasta = hasta or self.hoy + timedelta(days=7 * horizonte)
         dias = (self.agenda_hasta - self.agenda_desde).days + 1
+        self.ocupados_iniciales: set[str] = set()  # cupos que nacen ocupados (ocupación inicial)
         self.cupos, self.libres_base = generar_agenda(
             self.servicios,
             self.hoy,
@@ -62,6 +63,7 @@ class AgendaViva:
             primer_dia=self.agenda_desde,
             ultimo_dia=self.agenda_hasta,
             semana_calendario=semana_calendario,
+            ocupados_iniciales=self.ocupados_iniciales,
         )
         self.cupo_por_id = {cupo.id: cupo for cupo in self.cupos}
         self.servicio_por_id = {

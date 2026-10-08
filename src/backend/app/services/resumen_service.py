@@ -6,11 +6,13 @@ from ..repositories.app_state import AppState
 from .demanda_service import DemandaService
 from .etiquetas import Etiquetas
 from .ocupacion import (
+    SIN_CUPOS,
+    embudo_por_servicio,
     nivel,
-    ocupacion_por_servicio,
     porcentaje,
     rango_pedidos,
     rango_semana,
+    suma_embudo,
 )
 
 
@@ -28,15 +30,15 @@ class ResumenService:
 
     def resumen(self, semana: date | None = None) -> dict:
         estado = self._estado
-        inicio, fin, por_servicio = ocupacion_por_servicio(estado, semana)
+        inicio, fin, por_servicio = embudo_por_servicio(estado, semana)
         citas, (pedidos_desde, pedidos_hasta) = self._citas(semana)
         esperas = [c["dias_espera"] for c in citas]  # fecha_cupo − fecha_solicitud, como en D2
-        liberados = sum(f["liberados"] for f in por_servicio.values())
-        ocupados = sum(f["ocupados"] for f in por_servicio.values())
+        total = suma_embudo(por_servicio.values())
+        capacidades = {s["service_id"]: s["capacidad_semanal"] for s in estado.motor.servicios()}
         servicios = []
         for s in estado.motor.servicios():
-            fila = por_servicio.get(s["service_id"], {"liberados": 0, "ocupados": 0})
-            pct = porcentaje(fila["ocupados"], fila["liberados"])
+            fila = por_servicio.get(s["service_id"], SIN_CUPOS)
+            pct = porcentaje(fila["reservados"], fila["liberados"])
             servicios.append(
                 {
                     "service_id": s["service_id"],
@@ -45,8 +47,11 @@ class ResumenService:
                     "tipo_label": self._etiquetas.tipo(s["tipo"]),
                     "ocupacion_pct": pct,
                     "nivel": nivel(estado, pct),
+                    "capacidad_semanal": capacidades[s["service_id"]],
+                    "capacidad_agenda_abierta": fila["capacidad"],
+                    "libres_agenda_abierta": fila["libres"],
                     "cupos_liberados": fila["liberados"],
-                    "cupos_ocupados": fila["ocupados"],
+                    "cupos_reservados": fila["reservados"],
                 }
             )
         demanda = DemandaService(estado).por_tipo(citas)
@@ -57,9 +62,11 @@ class ResumenService:
                 "citas_agendadas": len(citas),
                 "espera_media_dias": round(sum(esperas) / len(esperas), 1) if esperas else 0.0,
                 "espera_linea_base_dias": round(estado.espera_linea_base_dias, 2),
-                "cupos_liberados": liberados,
-                "cupos_ocupados": ocupados,
-                "ocupacion_pct": porcentaje(ocupados, liberados),
+                "capacidad_agenda_abierta": total["capacidad"],
+                "libres_agenda_abierta": total["libres"],
+                "cupos_liberados": total["liberados"],
+                "cupos_reservados": total["reservados"],
+                "ocupacion_pct": porcentaje(total["reservados"], total["liberados"]),
                 "desencuentros": len(estado.desencuentros),
                 "atendidos_alternativa": sum(d["atendidos_con_alternativa"] for d in demanda),
             },

@@ -42,7 +42,8 @@ class Senal(BaseModel):
     id: str
     nombre: str
     descripcion: str
-    umbral: float | str | list[str]
+    umbral: float | str | list[str]  # valor tal como está en la configuración
+    umbral_texto: str  # el mismo valor en español, para mostrar
 
 
 class AvisoBloque(BaseModel):

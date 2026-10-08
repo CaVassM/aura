@@ -16,7 +16,7 @@ def resumen(estado) -> dict:
         "kpis": datos["kpis"],
         "des_por_grupo": dict(Counter(d["grupo"] for d in estado.desencuentros)),
         "por_servicio": {
-            s["nombre"]: (s["cupos_ocupados"], s["cupos_liberados"]) for s in datos["servicios"]
+            s["nombre"]: (s["cupos_reservados"], s["cupos_liberados"]) for s in datos["servicios"]
         },
     }
 
@@ -34,7 +34,7 @@ def main(nombres: list[str]) -> None:
         )
         print(f"  ocupación de la semana {k['ocupacion_pct']} % de {k['cupos_liberados']} liberados")
         print(f"  desencuentros {k['desencuentros']} · por grupo {f['des_por_grupo']}")
-    print("\nOcupación semanal por servicio (ocupados/liberados · %):")
+    print("\nOcupación semanal por servicio (reservados/liberados · %):")
     for servicio in filas[0]["por_servicio"]:
         celdas = []
         for f in filas:

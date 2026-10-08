@@ -26,10 +26,28 @@ class DesencuentroItem(BaseModel):
     grupo_label: str
 
 
-class Heatmap(BaseModel):
-    dias: list[str]
-    horas: list[int]
+class ServicioColumna(BaseModel):
+    tipo: str
+    label: str
+
+
+class MatrizDistritoServicio(BaseModel):
+    """Conteo de desencuentros: filas = distritos, columnas = servicio ideal (respeta los filtros)."""
+
+    distritos: list[str]
+    servicios: list[ServicioColumna]
     celdas: list[list[int]]
+    total_filas: list[int]
+    total_columnas: list[int]
+    total: int
+
+
+class FranjaPrincipal(BaseModel):
+    texto: str  # p. ej. "entre 19:00 y 21:00, lunes a viernes"
+    porcentaje: float  # % de los pedidos del conjunto filtrado que declaran esa franja
+    desde: str
+    hasta: str
+    dias: str
 
 
 class Insight(BaseModel):
@@ -46,8 +64,10 @@ class DesencuentrosOut(BaseModel):
     pagina: int
     paginas: int
     items: list[DesencuentroItem]
-    heatmap: Heatmap
-    insight: Insight
+    matriz_distrito_servicio: MatrizDistritoServicio
+    franja_principal: FranjaPrincipal | None
+    insight: Insight  # sobre todos los desencuentros, sin filtros
+    insight_filtro: Insight | None  # sobre el conjunto filtrado; None si no hay filtros activos
 
 
 class ServicioDetalleOut(BaseModel):

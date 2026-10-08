@@ -1,7 +1,7 @@
 """Estado de la demo y reinicio."""
 
 from ..repositories.app_state import AppState
-from .ocupacion import agenda, agenda_abierta, rango_semana
+from .ocupacion import agenda, agenda_abierta, rango_pedidos, rango_semana
 from .siembra_service import crear_estado_sembrado
 
 
@@ -14,6 +14,8 @@ class DemoService:
         inicio, fin = rango_semana(e["hoy"])
         agenda_desde, agenda_hasta = agenda(self._estado)
         abierta_desde, abierta_hasta = agenda_abierta(self._estado)
+        pedidos_desde, pedidos_hasta = rango_pedidos(self._estado)
+        p = self._estado.parametros
         return {
             "hoy": e["hoy"],
             "semana_inicio": inicio,
@@ -27,6 +29,12 @@ class DemoService:
             "semilla": e["semilla"],
             "factor_demanda": e["factor"],
             "proporcion_vespertino_trabaja": e["proporcion_vespertino_trabaja"],
+            "pedidos_desde": pedidos_desde,
+            "pedidos_hasta": pedidos_hasta,
+            "agenda_abierta_semanas": int(p["horizonte_semanas"]),
+            "ocupacion_inicial_pct": round(100 * float(p["ocupacion_inicial"]), 1),
+            "fraccion_liberada_pct": round(100 * e["fraccion_liberada"], 1),
+            "espera_linea_base_dias": round(self._estado.espera_linea_base_dias, 2),
             "umbrales_nivel": self._estado.parametros["coordinacion"]["nivel_ocupacion"],
         }
 

@@ -126,6 +126,22 @@ class ServicioAsignacion:
         """Espera media observada en D2 (`wait_days`), o None si D2 no está disponible."""
         return self._agenda.espera_historica_dias
 
+    def inventario_cupos(self) -> list[dict]:
+        """Todos los cupos de la agenda con su estado: ocupado desde el inicio, liberado para AURA, reservado."""
+        agenda = self._agenda
+        reservados = {cita["cupo_id"] for cita in agenda.reservas.values()}
+        return [
+            {
+                "cupo_id": c.id,
+                "service_id": c.service_id,
+                "fecha": c.fecha.isoformat(),
+                "ocupado_inicial": c.id in agenda.ocupados_iniciales,
+                "liberado": c.id in agenda.libres_base,
+                "reservado": c.id in reservados,
+            }
+            for c in agenda.cupos
+        ]
+
     def cupos_liberados(self, service_id: str | None = None) -> list[dict]:
         """Cupos liberados (de todos los servicios o de uno), con su fecha y si hay una cita."""
         agenda = self._agenda
@@ -141,7 +157,7 @@ class ServicioAsignacion:
                 "cupo_id": c.id,
                 "service_id": c.service_id,
                 "fecha": c.fecha.isoformat(),
-                "ocupado": c.id in ocupados,
+                "reservado": c.id in ocupados,
             }
             for c in sorted(cupos, key=lambda c: (c.fecha, c.hora_inicio, c.id))
         ]

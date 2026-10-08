@@ -3,7 +3,7 @@
 - **Agenda** (`agenda_desde`–`agenda_hasta`): todo lo generado, del día siguiente al primer
   pedido hasta hoy + horizonte.
 - **Agenda abierta** (`hoy + 1`–`agenda_hasta`): lo que todavía se puede reservar.
-- **Cupos liberados** y **ocupación** (cupos ocupados / cupos liberados × 100) se miden solo sobre
+- **Embudo de cupos** (capacidad → libres → liberados → reservados), **cupos liberados** y **ocupación** (cupos reservados / cupos liberados × 100) se miden solo sobre
   la agenda abierta: los cupos libres de días pasados ya no se pueden usar y no cuentan.
 - **Citas agendadas**, **espera media** y **desencuentros** cuentan todo lo sembrado desde el
   primer pedido (semana del demo).
@@ -60,18 +60,36 @@ def rango_de_cupos(estado: AppState, semana: date | None) -> tuple[date, date]:
     return max(desde, inicio), min(hasta, fin)
 
 
-def ocupacion_por_servicio(
+def embudo_por_servicio(
     estado: AppState, semana: date | None = None
 ) -> tuple[date, date, dict[str, dict[str, int]]]:
-    """Cupos liberados y ocupados por servicio sobre la agenda abierta (o la semana pedida)."""
+    """Embudo de cupos por servicio sobre la agenda abierta (o la semana pedida).
+
+    capacidad (cupos que el servicio atiende en el rango) → libres (tras la ocupación inicial)
+    → liberados (la parte que presta a AURA) → reservados (ya asignados por AURA).
+    """
     inicio, fin = rango_de_cupos(estado, semana)
     desde, hasta = inicio.isoformat(), fin.isoformat()
     por_servicio: dict[str, dict[str, int]] = defaultdict(
-        lambda: {"liberados": 0, "ocupados": 0}
+        lambda: {"capacidad": 0, "libres": 0, "liberados": 0, "reservados": 0}
     )
-    for cupo in estado.motor.cupos_liberados():
+    for cupo in estado.motor.inventario_cupos():
         if desde <= cupo["fecha"] <= hasta:
             fila = por_servicio[cupo["service_id"]]
-            fila["liberados"] += 1
-            fila["ocupados"] += cupo["ocupado"]
+            fila["capacidad"] += 1
+            fila["libres"] += not cupo["ocupado_inicial"]
+            fila["liberados"] += cupo["liberado"]
+            fila["reservados"] += cupo["reservado"]
     return inicio, fin, por_servicio
+
+
+SIN_CUPOS = {"capacidad": 0, "libres": 0, "liberados": 0, "reservados": 0}
+
+
+def suma_embudo(filas) -> dict[str, int]:
+    """Suma de embudos (total de la red)."""
+    total = dict(SIN_CUPOS)
+    for fila in filas:
+        for clave in total:
+            total[clave] += fila[clave]
+    return total

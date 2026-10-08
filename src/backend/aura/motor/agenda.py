@@ -54,6 +54,7 @@ def generar_agenda(
     primer_dia: date | None = None,
     ultimo_dia: date | None = None,
     semana_calendario: bool = False,
+    ocupados_iniciales: set[str] | None = None,
 ) -> tuple[list[Cupo], set[str]]:
     """Crea slots, marca ocupación previa y libera una fracción de los restantes.
 
@@ -65,6 +66,9 @@ def generar_agenda(
 
     La capacidad se reparte equitativamente entre bloques horarios de cada semana;
     cualquier resto se asigna, de a uno, a los primeros bloques.
+
+    Si se pasa `ocupados_iniciales`, ahí se agregan los cupos que nacen ocupados (la ocupación
+    inicial del servicio); no cambia lo que devuelve la función.
     """
     if duracion_min <= 0 or semanas <= 0 or not 0 <= fraccion_liberada <= 1:
         raise ValueError(
@@ -128,6 +132,8 @@ def generar_agenda(
             )
             n_ocupados = min(len(ids_semana), round(len(ids_semana) * fraccion_ocupada))
             ocupados = set(ids_semana[:n_ocupados])
+            if ocupados_iniciales is not None:
+                ocupados_iniciales.update(ocupados)
             restantes = ids_semana[n_ocupados:]
             liberados = round(len(restantes) * fraccion_liberada)
             libres.update(restantes[:liberados])

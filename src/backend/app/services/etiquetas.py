@@ -41,6 +41,14 @@ class Etiquetas:
             return f"{self.dia(dias[0])}–{self.dia(dias[-1])}"
         return ", ".join(self.dia(d) for d in dias)
 
+    def dias_texto_largo(self, indices: list[int]) -> str:
+        """`lunes a viernes` si los días son consecutivos (3 o más); si no, `lunes, miércoles`."""
+        dias = sorted(set(indices))
+        nombres = self._e["dias_semana_largo"]
+        if len(dias) >= 3 and all(b - a == 1 for a, b in zip(dias, dias[1:])):
+            return f"{nombres[dias[0]]} a {nombres[dias[-1]]}"
+        return ", ".join(nombres[d] for d in dias)
+
     def horario_texto(self, horario: list[dict]) -> str:
         """`Lun–Vie · 09:00–18:00`; varios tramos se separan con `; `."""
         tramos = []
@@ -60,6 +68,10 @@ class Etiquetas:
             )
         ]
 
+    def valor(self, codigo) -> str:
+        """Traduce un valor técnico de los datos (p. ej. `medium` → `media`); lo desconocido queda igual."""
+        return self._e["valores"].get(str(codigo), str(codigo))
+
     @property
     def dias_semana(self) -> list[str]:
         return list(self._e["dias_semana"])
@@ -71,6 +83,10 @@ class Etiquetas:
     @property
     def senales(self) -> dict:
         return self._e["senales"]
+
+    @property
+    def franja_principal(self) -> str:
+        return self._e["franja_principal"]
 
     @property
     def insight(self) -> str:

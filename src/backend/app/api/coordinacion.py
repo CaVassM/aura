@@ -23,10 +23,12 @@ def servicios(
     tipo: str | None = None,
     canal: str | None = None,
     solo_alta_demanda: bool = False,
+    distrito: str | None = None,
+    nivel: str | None = Query(None, pattern="^(baja|media|alta)$"),
     semana: date | None = SEMANA,
     servicio: ServiciosService = Depends(get_servicios),
 ):
-    return servicio.geojson(tipo, canal, solo_alta_demanda, semana)
+    return servicio.geojson(tipo, canal, solo_alta_demanda, semana, distrito, nivel)
 
 
 @router.get("/servicios/{service_id}", response_model=ServicioDetalleOut)

@@ -20,11 +20,16 @@ el tamaño real se indica en cada caso). Prefijo común: `/api`. Esquemas comple
   **Agenda abierta** (`agenda_abierta_inicio`–`agenda_abierta_fin`): lo que todavía se puede reservar, de `hoy` + 1 (16 nov) al fin de la agenda.
   La capacidad semanal de D6 se reparte por semana calendario (Lun–Dom); una semana cortada por el inicio o el fin de la agenda recibe capacidad
   proporcional a los días de atención del servicio que caen dentro del rango.
+- **Embudo de cupos** (por servicio y de toda la red, sobre la agenda abierta): `capacidad_agenda_abierta` (la capacidad semanal de D6 prorrateada a
+  los días de la agenda abierta) → `libres_agenda_abierta` (después de la ocupación inicial del servicio) → `cupos_liberados` (la parte de los libres que
+  el servicio presta a AURA) → `cupos_reservados` (los que AURA ya asignó a un estudiante). `capacidad_semanal` es la de D6, sin prorratear.
+  `/api/demo/estado` trae los porcentajes (`ocupacion_inicial_pct`, `fraccion_liberada_pct`), `agenda_abierta_semanas`, el rango de pedidos y la línea
+  base de espera para que el front arme sus textos sin escribir cifras a mano.
 - **Qué mide cada KPI**
-  - `cupos_liberados`, `cupos_ocupados` y `ocupacion_pct` se calculan **solo sobre la agenda abierta**: los cupos libres de días ya pasados
-    no se pueden usar y no cuentan como liberados. Ocupación = `cupos_ocupados / cupos_liberados × 100`, sobre cupos **liberados** (no sobre la capacidad total).
+  - `cupos_liberados`, `cupos_reservados` y `ocupacion_pct` se calculan **solo sobre la agenda abierta**: los cupos libres de días ya pasados
+    no se pueden usar y no cuentan como liberados. Ocupación = `cupos_reservados / cupos_liberados × 100`, sobre cupos **liberados** (no sobre la capacidad total).
   - `citas_agendadas`, `espera_media_dias` y `desencuentros` cuentan **todo lo sembrado** en la semana de pedidos (9–15 nov), incluidas las citas
-    que cayeron en días ya pasados; por eso `citas_agendadas` puede ser mayor que `cupos_ocupados`.
+    que cayeron en días ya pasados; por eso `citas_agendadas` puede ser mayor que `cupos_reservados`.
   - Con `?semana=YYYY-MM-DD` los cupos se acotan a esa semana Lun–Dom dentro de la agenda abierta (una semana pasada da 0 liberados) y las citas a las solicitadas esa semana.
 - **Atendidos con alternativa afín** (`kpis.atendidos_alternativa`, `demanda_por_tipo`): pedidos cuyo servicio ideal era de un tipo y que
   terminaron en un cupo de **otro tipo** porque la afinidad lo permite. `demanda_por_tipo` desglosa, por tipo ideal, los `pedidos`
@@ -50,9 +55,9 @@ el tamaño real se indica en cada caso). Prefijo común: `/api`. Esquemas comple
 | GET | `/api/demo/estado` | Fecha demo, semana, rango de la agenda y de la agenda abierta, y etiqueta del escenario |
 | POST | `/api/demo/reiniciar` | Reconstruye y vuelve a sembrar la demo |
 | GET | `/api/coordinacion/resumen?semana=` | KPI y ocupación por servicio |
-| GET | `/api/coordinacion/servicios?tipo=&canal=&solo_alta_demanda=&semana=` | GeoJSON de servicios para el mapa |
+| GET | `/api/coordinacion/servicios?tipo=&canal=&distrito=&nivel=&solo_alta_demanda=&semana=` | GeoJSON de servicios para el mapa |
 | GET | `/api/coordinacion/servicios/{service_id}?semana=` | Detalle de un servicio |
-| GET | `/api/coordinacion/desencuentros?motivo=&distrito=&servicio_ideal=&grupo=&pagina=&tamano=` | Tabla, heatmap e insight |
+| GET | `/api/coordinacion/desencuentros?motivo=&distrito=&servicio_ideal=&grupo=&pagina=&tamano=` | Tabla, matriz distrito × servicio, franja principal e insight |
 | GET | `/api/coordinacion/desencuentros.csv` | Los mismos filtros, sin paginar |
 | GET | `/api/coordinacion/reglas` | Reglas del motor en solo lectura |
 
@@ -72,6 +77,12 @@ el tamaño real se indica en cada caso). Prefijo común: `/api`. Esquemas comple
   "semilla": 42,
   "factor_demanda": 6.0,
   "proporcion_vespertino_trabaja": 0.1,
+  "pedidos_desde": "2026-11-09",
+  "pedidos_hasta": "2026-11-15",
+  "agenda_abierta_semanas": 2,
+  "ocupacion_inicial_pct": 10.0,
+  "fraccion_liberada_pct": 50.0,
+  "espera_linea_base_dias": 41.96,
   "umbrales_nivel": {
     "baja_menor_que": 50.0,
     "alta_mayor_que": 70.0
@@ -100,6 +111,12 @@ Devuelve lo mismo que `/api/demo/estado`. Tras la llamada, recargar todos los da
   "semilla": 42,
   "factor_demanda": 6.0,
   "proporcion_vespertino_trabaja": 0.1,
+  "pedidos_desde": "2026-11-09",
+  "pedidos_hasta": "2026-11-15",
+  "agenda_abierta_semanas": 2,
+  "ocupacion_inicial_pct": 10.0,
+  "fraccion_liberada_pct": 50.0,
+  "espera_linea_base_dias": 41.96,
   "umbrales_nivel": {
     "baja_menor_que": 50.0,
     "alta_mayor_que": 70.0
@@ -109,7 +126,7 @@ Devuelve lo mismo que `/api/demo/estado`. Tras la llamada, recargar todos los da
 
 ## GET /api/coordinacion/resumen
 
-`agenda_abierta` es el rango sobre el que se miden `cupos_liberados`, `cupos_ocupados` y `ocupacion_pct`; `pedidos` es el rango de pedidos que cuentan
+`agenda_abierta` es el rango sobre el que se miden el embudo de cupos (`capacidad_agenda_abierta`, `libres_agenda_abierta`, `cupos_liberados`, `cupos_reservados`) y `ocupacion_pct`; `pedidos` es el rango de pedidos que cuentan
 `citas_agendadas` y `espera_media_dias` (con `?semana=` ambos se acotan a esa semana). `servicios` trae los 15 servicios (aquí se muestran 2).
 
 ```json
@@ -126,8 +143,10 @@ Devuelve lo mismo que `/api/demo/estado`. Tras la llamada, recargar todos los da
     "citas_agendadas": 762,
     "espera_media_dias": 4.5,
     "espera_linea_base_dias": 41.96,
+    "capacidad_agenda_abierta": 2310,
+    "libres_agenda_abierta": 2076,
     "cupos_liberados": 1036,
-    "cupos_ocupados": 483,
+    "cupos_reservados": 483,
     "ocupacion_pct": 46.6,
     "desencuentros": 38,
     "atendidos_alternativa": 180
@@ -181,8 +200,11 @@ Devuelve lo mismo que `/api/demo/estado`. Tras la llamada, recargar todos los da
       "tipo_label": "Consejería",
       "ocupacion_pct": 71.1,
       "nivel": "alta",
+      "capacidad_semanal": 42,
+      "capacidad_agenda_abierta": 84,
+      "libres_agenda_abierta": 76,
       "cupos_liberados": 38,
-      "cupos_ocupados": 27
+      "cupos_reservados": 27
     },
     {
       "service_id": "SRV_AE_002",
@@ -191,8 +213,11 @@ Devuelve lo mismo que `/api/demo/estado`. Tras la llamada, recargar todos los da
       "tipo_label": "Apoyo entre pares",
       "ocupacion_pct": 77.1,
       "nivel": "alta",
+      "capacidad_semanal": 55,
+      "capacidad_agenda_abierta": 110,
+      "libres_agenda_abierta": 98,
       "cupos_liberados": 48,
-      "cupos_ocupados": 37
+      "cupos_reservados": 37
     }
   ]
 }
@@ -236,8 +261,10 @@ GeoJSON `FeatureCollection` con la geometría de D6 tal cual. Filtros: `tipo` (`
         "canales": ["in_person", "digital"],
         "canales_label": ["Presencial", "Videollamada"],
         "capacidad_semanal": 42,
+        "capacidad_agenda_abierta": 84,
+        "libres_agenda_abierta": 76,
         "cupos_liberados": 38,
-        "cupos_ocupados": 27,
+        "cupos_reservados": 27,
         "ocupacion_pct": 71.1,
         "nivel": "alta",
         "alta_demanda": true,
@@ -290,22 +317,28 @@ GeoJSON `FeatureCollection` con la geometría de D6 tal cual. Filtros: `tipo` (`
     {
       "fecha": "2026-11-10",
       "dia": "Mar",
+      "capacidad": 9,
+      "libres": 8,
       "liberados": 3,
-      "ocupados": 3,
+      "reservados": 3,
       "abierto": false
     },
     {
       "fecha": "2026-11-11",
       "dia": "Mié",
+      "capacidad": 9,
+      "libres": 9,
       "liberados": 7,
-      "ocupados": 7,
+      "reservados": 7,
       "abierto": false
     },
     {
       "fecha": "2026-11-12",
       "dia": "Jue",
+      "capacidad": 9,
+      "libres": 7,
       "liberados": 4,
-      "ocupados": 4,
+      "reservados": 4,
       "abierto": false
     }
   ],
@@ -334,14 +367,14 @@ GeoJSON `FeatureCollection` con la geometría de D6 tal cual. Filtros: `tipo` (`
 
 ## GET /api/coordinacion/desencuentros
 
-`total` = todos los registrados; `filtrados` = tras los filtros; `paginas` ≥ 1. Orden: más recientes primero. El **heatmap** y el **insight** se calculan sobre el conjunto filtrado (no solo la página).
+`total` = todos los registrados; `filtrados` = tras los filtros; `paginas` ≥ 1. Orden: más recientes primero. La **matriz**, la **franja principal** y `insight_filtro` se calculan sobre el conjunto filtrado (no solo la página); `insight` no.
 
-- **Heatmap:** `celdas[día][hora]` cuenta las solicitudes cuya franja cubre esa hora (`dias` = Lun–Sáb, `horas` = 9–20).
-  Una solicitud Lun–Vie 19:00–21:00 suma 1 en cada una de 10 celdas.
-- **Insight:** la combinación (grupo, servicio ideal, franja) más frecuente, redactada en español; `porcentaje` es su peso sobre los filtrados.
-- `franja` resume el primer tramo horario de la solicitud, con sus días agrupados (`Lun–Vie`).
+- **`matriz_distrito_servicio`:** conteo de desencuentros por distrito (filas, los de D6) y servicio ideal (columnas, los tipos), con `total_filas`, `total_columnas` y `total`. Respeta los filtros; en el front, un clic en una celda aplica sus dos filtros.
+- **`franja_principal`:** `{texto, porcentaje, desde, hasta, dias}`; la franja (horas y días) que más declaran los pedidos del conjunto, p. ej. «100 % piden entre 19:00 y 21:00, lunes a viernes». `null` si no hay desencuentros. Todos los desencuentros simulados declaran la misma franja.
+- **`insight`:** el hallazgo principal, siempre sobre **todos** los desencuentros (no cambia con los filtros): la combinación (grupo, servicio ideal, franja) más frecuente, redactada en español. **`insight_filtro`** es el mismo cálculo sobre el conjunto filtrado (`null` si no hay filtros activos): el front lo muestra debajo como «En este filtro: …».
+- `franja` (en cada ítem) resume el primer tramo horario de la solicitud, con sus días agrupados (`Lun–Vie`).
 
-Ejemplo con `tamano=2&grupo=nocturno` (se muestra 1 ítem y 2 filas del heatmap):
+Ejemplo con `tamano=2&grupo=nocturno` (se muestra 1 ítem y 2 filas de la matriz):
 
 ```json
 {
@@ -369,15 +402,49 @@ Ejemplo con `tamano=2&grupo=nocturno` (se muestra 1 ítem y 2 filas del heatmap)
       "grupo_label": "Nocturno"
     }
   ],
-  "heatmap": {
-    "dias": ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"],
-    "horas": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  "matriz_distrito_servicio": {
+    "distritos": ["DIST_GAIA", "DIST_HORIZON"],
+    "servicios": [
+      {
+        "tipo": "counseling",
+        "label": "Consejería"
+      },
+      {
+        "tipo": "peer_support",
+        "label": "Apoyo entre pares"
+      },
+      {
+        "tipo": "career_guidance",
+        "label": "Orientación vocacional"
+      }
+    ],
     "celdas": [
-      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 38, 38],
-      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 38, 38]
-    ]
+      [4, 3, 4],
+      [6, 2, 1]
+    ],
+    "total_filas": [11, 9],
+    "total_columnas": [21, 9, 8],
+    "total": 38
+  },
+  "franja_principal": {
+    "texto": "entre 19:00 y 21:00, lunes a viernes",
+    "porcentaje": 100.0,
+    "desde": "19:00",
+    "hasta": "21:00",
+    "dias": "lunes a viernes"
   },
   "insight": {
+    "texto": "55,3 % de los desencuentros son de estudiantes nocturnos que buscan consejería entre las 19:00 y las 21:00.",
+    "porcentaje": 55.3,
+    "grupo": "nocturno",
+    "servicio_ideal": "counseling",
+    "franja": {
+      "dia": "Lun–Vie",
+      "desde": "19:00",
+      "hasta": "21:00"
+    }
+  },
+  "insight_filtro": {
     "texto": "55,3 % de los desencuentros son de estudiantes nocturnos que buscan consejería entre las 19:00 y las 21:00.",
     "porcentaje": 55.3,
     "grupo": "nocturno",
@@ -402,11 +469,15 @@ el front debe mostrar un mensaje, no una tabla en blanco:
   "paginas": 1,
   "items": [],
   "insight": {
-    "texto": "No hay desencuentros con estos filtros.",
-    "porcentaje": 0.0,
-    "grupo": null,
-    "servicio_ideal": null,
-    "franja": null
+    "texto": "55,3 % de los desencuentros son de estudiantes nocturnos que buscan consejería entre las 19:00 y las 21:00.",
+    "porcentaje": 55.3,
+    "grupo": "nocturno",
+    "servicio_ideal": "counseling",
+    "franja": {
+      "dia": "Lun–Vie",
+      "desde": "19:00",
+      "hasta": "21:00"
+    }
   }
 }
 ```
@@ -423,7 +494,7 @@ DES-0000037,2026-11-13,social_support,Apoyo social,peer_support,Apoyo entre pare
 
 ## GET /api/coordinacion/reglas
 
-Cinco bloques en solo lectura; cada uno trae `provisional` (leído de `tablas.yaml`). Ejemplo recortado:
+Cinco bloques en solo lectura; los valores técnicos de los datos llegan traducidos (`umbral_texto`: «media o alta»; `umbral` conserva el valor de la configuración); cada uno trae `provisional` (leído de `tablas.yaml`). Ejemplo recortado:
 
 ```json
 {
@@ -495,14 +566,16 @@ Cinco bloques en solo lectura; cada uno trae `provisional` (leído de `tablas.ya
       {
         "id": "S1",
         "nombre": "Alerta de abandono",
-        "descripcion": "La alerta de abandono (dropout_alert) es medium o high.",
-        "umbral": ["medium", "high"]
+        "descripcion": "La alerta de abandono es media o alta.",
+        "umbral": ["medium", "high"],
+        "umbral_texto": "media o alta"
       },
       {
         "id": "S2",
         "nombre": "Caída de asistencia",
         "descripcion": "La tasa de asistencia bajó al menos 0,05 frente al período anterior.",
-        "umbral": 0.05
+        "umbral": 0.05,
+        "umbral_texto": "0,05"
       }
     ]
   },
@@ -646,5 +719,6 @@ Un segundo intento sobre la misma opción responde 409 `{   "error": "cupo_ya_to
 - Servicio = nombre de D6 + `tipo_label`, en todas las vistas (tarjetas, tabla, mapa, tooltip, detalle).
 - Desencuentros: si un filtro deja la tabla vacía, estado vacío con mensaje explicativo (usar `insight.texto`).
 - Resumen: KPI «Atendidos con alternativa afín» y tabla «Demanda real por tipo de servicio» (`demanda_por_tipo`); detalle del servicio: bloque «Demanda de {tipo}».
+- Los textos de los ⓘ viven en `lib/glosario.ts` y se rellenan con `/api/demo/estado`; el embudo de cupos usa los 4 campos por servicio.
 - Reinicio: botón «Reiniciar demo» → `POST /api/demo/reiniciar` y recargar.
 - Los endpoints del estudiante pasaron a snake_case.

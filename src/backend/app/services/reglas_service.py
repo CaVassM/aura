@@ -4,12 +4,6 @@ from ..repositories.app_state import AppState
 from .etiquetas import Etiquetas
 
 
-def _texto_umbral(umbral) -> str:
-    if isinstance(umbral, list):
-        return " o ".join(str(u) for u in umbral)
-    return str(umbral).replace(".", ",")
-
-
 class ReglasService:
     def __init__(self, estado: AppState):
         self._p = estado.parametros
@@ -18,6 +12,14 @@ class ReglasService:
 
     def reglas(self) -> dict:
         et, p, t = self._et, self._p, self._t
+
+        def texto_umbral(umbral) -> str:
+            """Umbral en español: `media o alta`, `0,05`, `−0,5`."""
+            if isinstance(umbral, list):
+                return " o ".join(et.valor(u) for u in umbral)
+            if isinstance(umbral, (int, float)):
+                return str(umbral).replace(".", ",").replace("-", "−")
+            return et.valor(umbral)
         prov = t["provisional"]
         tipos = list(t["afinidad"])
         aviso = p["aviso"]
@@ -67,9 +69,10 @@ class ReglasService:
                         "id": sid,
                         "nombre": et.senales[sid]["nombre"],
                         "descripcion": et.senales[sid]["descripcion"].format(
-                            umbral=_texto_umbral(umbral)
+                            umbral=texto_umbral(umbral)
                         ),
                         "umbral": umbral,
+                        "umbral_texto": texto_umbral(umbral),
                     }
                     for sid, umbral in umbrales.items()
                 ],
