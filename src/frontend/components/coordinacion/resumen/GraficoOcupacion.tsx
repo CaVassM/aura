@@ -1,56 +1,66 @@
+"use client";
+
 import { Resumen } from "@/lib/types-coordinacion";
-import { pct, rangoFechas } from "@/lib/format";
-import LeyendaNiveles from "../LeyendaNiveles";
-import { NIVEL_BG } from "../nivel";
+import { pct } from "@/lib/format";
+import Barra from "../Barra";
+import InfoTip from "../InfoTip";
+import { NIVEL_BG, NIVEL_INK, NIVEL_LABEL, NIVELES } from "../nivel";
+import NumeroAnimado from "../NumeroAnimado";
+import { useDemo } from "../DemoProvider";
+import { num } from "@/lib/format";
+
+/** Leyenda baja / media / alta con los umbrales que define el backend, y su ⓘ. */
+export function LeyendaNiveles() {
+  const { estado } = useDemo();
+  const u = estado?.umbrales_nivel;
+  const texto = (nivel: (typeof NIVELES)[number]) => {
+    if (!u) return NIVEL_LABEL[nivel];
+    if (nivel === "baja") return `${NIVEL_LABEL[nivel]} < ${num(u.baja_menor_que)}%`;
+    if (nivel === "alta") return `${NIVEL_LABEL[nivel]} > ${num(u.alta_mayor_que)}%`;
+    return `${NIVEL_LABEL[nivel]} ${num(u.baja_menor_que)}–${num(u.alta_mayor_que)}%`;
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-co-navy">
+      {NIVELES.map((nivel) => (
+        <span key={nivel} className="flex items-center gap-1.5">
+          <span className={`h-2.5 w-2.5 rounded-full ${NIVEL_BG[nivel]}`} />
+          {texto(nivel)}
+        </span>
+      ))}
+      <InfoTip termino="nivel" />
+    </div>
+  );
+}
 
 /**
- * Barras horizontales de ocupación por servicio. El ancho y el nivel (color) vienen del backend;
- * se dibujan con divs (ancho en línea), sin librerías de gráficos.
+ * Barras de ocupación por servicio. El ancho y el nivel (color) vienen del backend; las barras
+ * crecen desde 0 con un pequeño escalonado.
  */
 export default function GraficoOcupacion({ resumen }: { resumen: Resumen }) {
-  const { agenda_abierta, servicios } = resumen;
   return (
-    <div className="rounded-xl2 border border-aura-border bg-white p-6 shadow-card">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-base font-bold text-aura-navy">
-            Ocupación de cupos liberados
-          </p>
-          <p className="text-sm text-aura-gray">
-            Por servicio · agenda abierta{" "}
-            {rangoFechas(agenda_abierta.desde, agenda_abierta.hasta)}
-          </p>
-        </div>
-        <LeyendaNiveles />
-      </div>
-
-      <ul className="mt-6 space-y-3 border-t border-aura-border pt-5">
-        {servicios.map((s) => (
-          <li
-            key={s.service_id}
-            className="flex items-center gap-4 text-sm"
-            title={`${s.cupos_ocupados} de ${s.cupos_liberados} cupos liberados ocupados`}
-          >
-            <span className="w-56 shrink-0 text-right leading-tight">
-              <span className="block text-aura-navy">{s.nombre}</span>
-              <span className="block text-xs text-aura-gray">{s.tipo_label}</span>
-            </span>
-            <div
-              className="h-3 flex-1 overflow-hidden rounded-full bg-aura-bg"
-              role="img"
-              aria-label={`${s.nombre}, ${s.tipo_label}: ${pct(s.ocupacion_pct)} de ocupación`}
-            >
-              <div
-                className={`h-full rounded-full ${NIVEL_BG[s.nivel]}`}
-                style={{ width: `${Math.min(100, Math.max(0, s.ocupacion_pct))}%` }}
-              />
-            </div>
-            <span className="w-12 shrink-0 text-xs text-aura-gray">
-              {pct(s.ocupacion_pct)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ul className="space-y-2.5">
+      {resumen.servicios.map((s, i) => (
+        <li
+          key={s.service_id}
+          className="grid grid-cols-[minmax(9rem,15rem)_1fr_4.5rem] items-center gap-4 text-sm"
+          title={`${s.cupos_reservados} de ${s.cupos_liberados} cupos liberados reservados`}
+        >
+          <span className="text-right leading-tight">
+            <span className="block font-bold text-co-navy">{s.nombre}</span>
+            <span className="block text-xs font-semibold text-co-teal">{s.tipo_label}</span>
+          </span>
+          <Barra
+            pct={s.ocupacion_pct}
+            color={NIVEL_BG[s.nivel]}
+            alto="h-3.5"
+            retraso={i * 45}
+            etiqueta={`${s.nombre}, ${s.tipo_label}: ${pct(s.ocupacion_pct)} de ocupación`}
+          />
+          <span className={`text-right text-base font-extrabold ${NIVEL_INK[s.nivel]}`}>
+            <NumeroAnimado valor={s.ocupacion_pct} decimales={1} sufijo="%" duracion={700} />
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

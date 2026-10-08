@@ -40,10 +40,37 @@ export function rangoFechas(desde: string, hasta: string): string {
   return `del ${inicio} al ${fechaLarga(hasta)} de ${b.anio}`;
 }
 
+/** "16–29 nov" (o "28 nov–3 dic" si cruza de mes). */
+export function rangoCorto(desde: string, hasta: string): string {
+  const a = partes(desde);
+  const b = partes(hasta);
+  return a.mes === b.mes
+    ? `${a.dia}–${b.dia} ${MESES[b.mes - 1].slice(0, 3)}`
+    : `${fechaCorta(desde)}–${fechaCorta(hasta)}`;
+}
+
+/** "del 9 al 15 nov" (o "del 28 oct al 3 nov" si cruza de mes). */
+export function rangoDel(desde: string, hasta: string): string {
+  const a = partes(desde);
+  const b = partes(hasta);
+  return a.mes === b.mes
+    ? `del ${a.dia} al ${b.dia} ${MESES[b.mes - 1].slice(0, 3)}`
+    : `del ${fechaCorta(desde)} al ${fechaCorta(hasta)}`;
+}
+
+/** "del 9 al 15 de noviembre" (sin año). */
+export function rangoSinAnio(desde: string, hasta: string): string {
+  const a = partes(desde);
+  const b = partes(hasta);
+  const inicio = a.mes === b.mes ? `${a.dia}` : fechaLarga(desde);
+  return `del ${inicio} al ${fechaLarga(hasta)}`;
+}
+
 export function num(valor: number, decimales = 1): string {
   return valor.toLocaleString("es-ES", {
     minimumFractionDigits: 0,
     maximumFractionDigits: decimales,
+    useGrouping: "always" as never, // 1.036 (es-ES no agrupa los números de 4 cifras)
   });
 }
 
@@ -52,6 +79,7 @@ export function numFijo(valor: number, decimales: number): string {
   return valor.toLocaleString("es-ES", {
     minimumFractionDigits: decimales,
     maximumFractionDigits: decimales,
+    useGrouping: "always" as never,
   });
 }
 

@@ -7,3 +7,38 @@ body {
   height: 100%;
   background-color: #faf8f3;
 }
+
+/* Cifras tabulares para que los números no "bailen" al animarse o filtrarse. */
+.tabular {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Elementos SVG animados: escalar desde su propio centro. */
+.svg-centro {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Foco visible y coherente en el panel. */
+.co-foco:focus-visible {
+  outline: 2px solid #1b5e66;
+  outline-offset: 2px;
+}
+
+/* Sin animaciones si la persona lo pide: todo queda en su estado final. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+  .halo-pulso {
+    display: none;
+  }
+}

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import CoordinacionShell from "@/components/coordinacion/CoordinacionShell";
 import { useApi } from "@/components/coordinacion/useApi";
+import { ConInfo } from "@/components/coordinacion/InfoTip";
+import NumeroAnimado from "@/components/coordinacion/NumeroAnimado";
+import Seccion from "@/components/coordinacion/Seccion";
 import FiltrosDesencuentrosBarra from "@/components/coordinacion/desencuentros/FiltrosDesencuentros";
-import HeatmapDiaHora from "@/components/coordinacion/desencuentros/HeatmapDiaHora";
 import InsightCard from "@/components/coordinacion/desencuentros/InsightCard";
+import MatrizDistritoServicio from "@/components/coordinacion/desencuentros/MatrizDistritoServicio";
 import TablaDesencuentros from "@/components/coordinacion/desencuentros/TablaDesencuentros";
 import { EstadoCarga, EstadoError, EstadoVacio } from "@/components/ui/Estados";
 import { getDesencuentros, getReglas, getServicios } from "@/lib/api";
@@ -37,67 +39,79 @@ export default function DesencuentrosPage() {
     servicios.reintentar();
   };
   const datos = lista.data;
+  const franja = datos?.franja_principal;
 
   return (
-    <CoordinacionShell activeHref="/coordinacion/desencuentros">
-      <div className="mx-auto max-w-6xl space-y-6 px-8 py-8">
-        <div>
-          <p className="text-xs font-bold tracking-wide text-aura-teal">
-            DESENCUENTROS
-          </p>
-          <h2 className="mt-1.5 text-3xl font-bold text-aura-navy">
-            Cuando la disponibilidad no coincide con lo que la persona necesita.
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-aura-gray">
-            Solicitudes que AURA no pudo atender con un cupo compatible. Sirven
-            para decidir dónde abrir horarios; no se asignan manualmente.
-          </p>
-        </div>
+    <div className="mx-auto max-w-7xl space-y-8">
+      <h1 className="text-3xl font-extrabold tracking-tight text-co-navy">Desencuentros</h1>
 
-        {error ? (
-          <EstadoError error={error} onRetry={reintentar} />
-        ) : !datos || !reglas.data || !servicios.data ? (
-          <EstadoCarga />
-        ) : (
-          <>
-            {datos.filtrados > 0 && <InsightCard insight={datos.insight} />}
-            <FiltrosDesencuentrosBarra
-              reglas={reglas.data}
-              servicios={servicios.data.features}
-              filtros={filtros}
-              onChange={cambiarFiltros}
-              filtrados={datos.filtrados}
+      {error ? (
+        <EstadoError error={error} onRetry={reintentar} />
+      ) : !datos || !reglas.data || !servicios.data ? (
+        <EstadoCarga />
+      ) : (
+        <>
+          {franja && (
+            <p className="flex flex-wrap items-center text-base font-medium leading-snug text-co-navy">
+              <span className="mr-1.5 font-extrabold text-co-coral-ink">
+                <NumeroAnimado valor={franja.porcentaje} decimales={franja.porcentaje % 1 ? 1 : 0} sufijo=" %" />
+              </span>
+              piden {franja.texto}
+              <ConInfo termino="franja">{""}</ConInfo>
+            </p>
+          )}
+          {datos.total > 0 && (
+            <InsightCard
+              insight={datos.insight}
+              filtro={datos.filtrados > 0 ? datos.insight_filtro : null}
             />
+          )}
 
-            {datos.filtrados === 0 ? (
-              <div className="rounded-xl2 border border-dashed border-aura-border bg-white shadow-card">
-                <EstadoVacio
-                  titulo={
-                    datos.total === 0
-                      ? "Todavía no hay desencuentros"
-                      : "Ningún desencuentro coincide con estos filtros"
-                  }
-                  descripcion={
-                    datos.total === 0
-                      ? "Cuando una solicitud no encuentre un cupo compatible, aparecerá aquí."
-                      : `Hay ${datos.total} desencuentros registrados, pero ninguno cumple todos los filtros elegidos. Cambia o quita algún filtro para verlos.`
-                  }
-                  accion={
-                    Object.values(filtros).some(Boolean) && (
-                      <button
-                        type="button"
-                        onClick={() => cambiarFiltros({})}
-                        className="rounded-xl border border-aura-teal px-4 py-2 text-sm font-semibold text-aura-teal hover:bg-aura-teal-pale"
-                      >
-                        Quitar filtros
-                      </button>
-                    )
+          <FiltrosDesencuentrosBarra
+            reglas={reglas.data}
+            servicios={servicios.data.features}
+            filtros={filtros}
+            onChange={cambiarFiltros}
+            filtrados={datos.filtrados}
+          />
+
+          {datos.filtrados === 0 ? (
+            <EstadoVacio
+              titulo={
+                datos.total === 0
+                  ? "Todavía no hay desencuentros"
+                  : "Ningún desencuentro coincide con estos filtros"
+              }
+              descripcion={
+                datos.total === 0
+                  ? "Cuando una solicitud no encuentre un cupo compatible, aparecerá aquí."
+                  : `Hay ${datos.total} desencuentros registrados, pero ninguno cumple todos los filtros elegidos. Cambia o quita algún filtro para verlos.`
+              }
+              accion={
+                Object.values(filtros).some(Boolean) && (
+                  <button
+                    type="button"
+                    onClick={() => cambiarFiltros({})}
+                    className="co-foco rounded-md border border-co-teal px-4 py-2 text-sm font-bold text-co-teal hover:bg-co-teal-tint"
+                  >
+                    Quitar filtros
+                  </button>
+                )
+              }
+            />
+          ) : (
+            <>
+              <Seccion titulo="Dónde se concentran: distrito × servicio ideal" acento="bg-co-coral">
+                <MatrizDistritoServicio
+                  matriz={datos.matriz_distrito_servicio}
+                  distritoActivo={filtros.distrito}
+                  servicioActivo={filtros.servicio_ideal}
+                  onSeleccion={(distrito, servicio_ideal) =>
+                    cambiarFiltros({ ...filtros, distrito, servicio_ideal })
                   }
                 />
-              </div>
-            ) : (
-              <>
-                <HeatmapDiaHora heatmap={datos.heatmap} />
+              </Seccion>
+              <Seccion titulo="Pedidos sin cupo" acento="bg-co-teal">
                 <TablaDesencuentros
                   items={datos.items}
                   total={datos.filtrados}
@@ -106,11 +120,11 @@ export default function DesencuentrosPage() {
                   tamano={TAMANO}
                   onPagina={setPagina}
                 />
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </CoordinacionShell>
+              </Seccion>
+            </>
+          )}
+        </>
+      )}
+    </div>
   );
 }

@@ -6,13 +6,17 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { getDemoEstado, reiniciarDemo } from "@/lib/api";
+import { ContextoGlosario, contextoGlosario } from "@/lib/glosario";
 import { EstadoDemo } from "@/lib/types-coordinacion";
 
 interface DemoContexto {
   estado: EstadoDemo | null;
+  /** Números del glosario (porcentajes, semanas, umbrales) tomados de /api/demo/estado. */
+  glosario: ContextoGlosario;
   error: unknown;
   cargando: boolean;
   /** Sube cada vez que la demo se reinicia: las pantallas lo usan para recargar sus datos. */
@@ -47,6 +51,8 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     };
   }, [intento]);
 
+  const glosario = useMemo(() => contextoGlosario(estado), [estado]);
+
   const reintentar = useCallback(() => setIntento((n) => n + 1), []);
 
   const reiniciar = useCallback(async () => {
@@ -58,7 +64,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
   return (
     <Contexto.Provider
-      value={{ estado, error, cargando, version, reintentar, reiniciar }}
+      value={{ estado, glosario, error, cargando, version, reintentar, reiniciar }}
     >
       {children}
     </Contexto.Provider>

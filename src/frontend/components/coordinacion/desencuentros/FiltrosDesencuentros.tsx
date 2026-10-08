@@ -35,60 +35,54 @@ export default function FiltrosDesencuentrosBarra({
     onChange({ ...filtros, [campo]: valor || undefined });
 
   return (
-    <div className="rounded-xl2 border border-aura-border bg-white p-4 shadow-card sm:p-5">
-      <div className="flex flex-wrap items-end gap-4">
-        <FiltroSelect
-          etiqueta="Motivo"
-          valor={filtros.motivo ?? ""}
-          opciones={reglas.motivo_servicio.items.map((m) => ({
-            valor: m.motivo,
-            label: m.motivo_label,
-          }))}
-          onChange={poner("motivo")}
-        />
-        <FiltroSelect
-          etiqueta="Distrito"
-          valor={filtros.distrito ?? ""}
-          opciones={distritos.map((d) => ({ valor: d, label: distritoLabel(d) }))}
-          onChange={poner("distrito")}
-        />
-        <FiltroSelect
-          etiqueta="Servicio ideal"
-          valor={filtros.servicio_ideal ?? ""}
-          opciones={reglas.afinidad.tipos.map((t) => ({ valor: t.codigo, label: t.label }))}
-          onChange={poner("servicio_ideal")}
-        />
-        <FiltroSelect
-          etiqueta="Grupo"
-          valor={filtros.grupo ?? ""}
-          opciones={GRUPOS}
-          onChange={poner("grupo")}
-        />
-        <button
-          type="button"
-          onClick={() => onChange({})}
-          disabled={!activos}
-          className="pb-2 text-sm font-semibold text-aura-teal disabled:cursor-default disabled:text-aura-gray-light"
-        >
-          Limpiar
-        </button>
-        <a
-          href={urlDesencuentrosCsv(filtros)}
-          download="desencuentros.csv"
-          aria-disabled={filtrados === 0}
-          className={`ml-auto inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold ${
-            filtrados === 0
-              ? "pointer-events-none border-aura-border text-aura-gray-light"
-              : "border-aura-teal text-aura-teal hover:bg-aura-teal-pale"
-          }`}
-        >
-          <Download className="h-4 w-4" aria-hidden="true" />
-          Exportar CSV
-        </a>
-      </div>
-      <p className="mt-3 text-xs text-aura-gray">
-        La tabla, el heatmap y el hallazgo se actualizan juntos.
-      </p>
+    <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+      <FiltroSelect
+        etiqueta="Motivo"
+        valor={filtros.motivo ?? ""}
+        opciones={reglas.motivo_servicio.items.map((m) => ({ valor: m.motivo, label: m.motivo_label }))}
+        onChange={poner("motivo")}
+      />
+      <FiltroSelect
+        etiqueta="Distrito"
+        valor={filtros.distrito ?? ""}
+        opciones={distritos.map((d) => ({ valor: d, label: distritoLabel(d) }))}
+        onChange={poner("distrito")}
+      />
+      <FiltroSelect
+        etiqueta="Servicio ideal"
+        termino="servicio_ideal"
+        valor={filtros.servicio_ideal ?? ""}
+        opciones={reglas.afinidad.tipos.map((t) => ({ valor: t.codigo, label: t.label }))}
+        onChange={poner("servicio_ideal")}
+      />
+      <FiltroSelect
+        etiqueta="Grupo"
+        termino="grupo"
+        valor={filtros.grupo ?? ""}
+        opciones={GRUPOS}
+        onChange={poner("grupo")}
+      />
+      <button
+        type="button"
+        onClick={() => onChange({})}
+        disabled={!activos}
+        className="co-foco pb-2 text-sm font-bold text-co-teal disabled:cursor-default disabled:text-co-ink/50"
+      >
+        Limpiar
+      </button>
+      <a
+        href={urlDesencuentrosCsv(filtros)}
+        download="desencuentros.csv"
+        aria-disabled={filtrados === 0}
+        className={`co-foco ml-auto inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-bold ${
+          filtrados === 0
+            ? "pointer-events-none bg-co-line/60 text-co-ink/60"
+            : "bg-co-teal text-white hover:bg-co-teal-dark"
+        }`}
+      >
+        <Download className="h-4 w-4" aria-hidden="true" />
+        Exportar CSV
+      </a>
     </div>
   );
 }

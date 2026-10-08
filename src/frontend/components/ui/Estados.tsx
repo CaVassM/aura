@@ -9,7 +9,7 @@ export function EstadoCarga({ texto = "Cargando datos…" }: { texto?: string })
   return (
     <div
       role="status"
-      className="flex items-center justify-center gap-3 px-8 py-16 text-sm text-aura-gray"
+      className="flex items-center justify-center gap-3 px-8 py-16 text-sm font-medium text-co-ink"
     >
       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
       {texto}
@@ -31,24 +31,22 @@ export function EstadoError({
   return (
     <div
       role="alert"
-      className="mx-auto my-10 flex max-w-xl flex-col items-center gap-3 rounded-2xl border border-aura-tag-red-bg bg-white px-8 py-10 text-center shadow-card"
+      className="mx-auto my-10 flex max-w-xl flex-col items-center gap-3 rounded-lg border border-co-coral/40 bg-co-coral-tint px-8 py-10 text-center"
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-aura-tag-red-bg text-aura-tag-red-text">
-        <AlertTriangle className="h-5 w-5" aria-hidden="true" />
-      </div>
-      <p className="text-base font-semibold text-aura-navy">
+      <AlertTriangle className="h-6 w-6 text-co-coral-ink" aria-hidden="true" />
+      <p className="text-base font-bold text-co-navy">
         {sinConexion
           ? "No se pudo conectar con el backend"
           : "No se pudieron cargar los datos"}
       </p>
-      <p className="text-sm text-aura-gray">{mensaje}</p>
+      <p className="text-sm text-co-ink">{mensaje}</p>
       {sinConexion && (
-        <p className="text-xs leading-relaxed text-aura-gray">
+        <p className="text-xs leading-relaxed text-co-ink">
           Revisa que el backend esté corriendo (
-          <code className="rounded bg-aura-bg px-1">
+          <code className="rounded bg-white/70 px-1">
             uvicorn app.main:app --port 8080
           </code>
-          ) y que <code className="rounded bg-aura-bg px-1">NEXT_PUBLIC_API_URL</code>{" "}
+          ) y que <code className="rounded bg-white/70 px-1">NEXT_PUBLIC_API_URL</code>{" "}
           apunte a {API_BASE_URL}.
         </p>
       )}
@@ -56,7 +54,7 @@ export function EstadoError({
         <button
           type="button"
           onClick={onRetry}
-          className="mt-2 rounded-xl bg-aura-teal px-4 py-2 text-sm font-semibold text-white hover:bg-aura-teal-dark"
+          className="co-foco mt-2 rounded-md bg-co-teal px-4 py-2 text-sm font-semibold text-white hover:bg-co-teal-dark"
         >
           Reintentar
         </button>
@@ -77,11 +75,9 @@ export function EstadoVacio({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-8 py-14 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-aura-purple-nav text-aura-purple">
-        <Inbox className="h-5 w-5" aria-hidden="true" />
-      </div>
-      <p className="text-base font-semibold text-aura-navy">{titulo}</p>
-      <p className="max-w-md text-sm text-aura-gray">{descripcion}</p>
+      <Inbox className="h-6 w-6 text-co-teal" aria-hidden="true" />
+      <p className="text-base font-bold text-co-navy">{titulo}</p>
+      <p className="max-w-md text-sm text-co-ink">{descripcion}</p>
       {accion && <div className="mt-2">{accion}</div>}
     </div>
   );

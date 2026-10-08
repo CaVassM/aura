@@ -7,7 +7,7 @@ esperar al backend de Camilo; está armado para que conectar el backend real
 sea cambiar un solo archivo (`lib/api.ts`).
 
 > **Coordinación ya usa el backend real.** Las cuatro pantallas de `/coordinacion`
-> (Resumen, Mapa de servicios, Desencuentros y Reglas) leen de la API FastAPI de
+> (Resumen, Mapa de servicios, Servicios, Desencuentros y Reglas) leen de la API FastAPI de
 > `src/backend` a través de `lib/api.ts` (tipos en `lib/types-coordinacion.ts`).
 > Para verlas hay que levantar el backend (`uvicorn app.main:app --port 8080` en
 > `src/backend`) y definir `NEXT_PUBLIC_API_URL` en `.env.local`; si el backend no

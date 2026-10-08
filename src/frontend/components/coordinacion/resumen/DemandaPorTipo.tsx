@@ -1,12 +1,13 @@
+"use client";
+
 import { DemandaTipo } from "@/lib/types-coordinacion";
 import { num } from "@/lib/format";
+import { ConInfo } from "../InfoTip";
 
-/** Texto «164 con alternativa afín (→ Apoyo entre pares)» de una fila de demanda. */
+/** Texto «164 → Apoyo entre pares: 164» de una fila de demanda. */
 export function textoDesvio(d: DemandaTipo): string {
   if (d.atendidos_con_alternativa === 0) return "Ninguno";
-  const destinos = d.destinos
-    .map((x) => `${x.tipo_label}: ${num(x.cantidad, 0)}`)
-    .join(", ");
+  const destinos = d.destinos.map((x) => `${x.tipo_label}: ${num(x.cantidad, 0)}`).join(", ");
   return `${num(d.atendidos_con_alternativa, 0)} → ${destinos}`;
 }
 
@@ -17,38 +18,47 @@ export function textoDesvio(d: DemandaTipo): string {
  */
 export default function DemandaPorTipo({ demanda }: { demanda: DemandaTipo[] }) {
   return (
-    <div className="overflow-hidden rounded-xl2 border border-aura-border bg-white shadow-card">
-      <div className="border-b border-aura-border px-6 py-4">
-        <p className="font-bold text-aura-navy">Demanda real por tipo de servicio</p>
-        <p className="mt-1 text-sm text-aura-gray">
-          Pedidos según el servicio que necesitaban. «Con alternativa afín» son los
-          que terminaron en otro tipo porque el ideal no tenía cupo compatible.
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-aura-bg text-xs font-bold uppercase tracking-wide text-aura-gray">
-            <tr>
-              <th className="px-6 py-3">Servicio ideal</th>
-              <th className="px-4 py-3">Pedidos</th>
-              <th className="px-4 py-3">En su tipo</th>
-              <th className="px-4 py-3">Con alternativa afín (a cuál)</th>
-              <th className="px-4 py-3">Sin cupo</th>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-left text-sm">
+        <thead>
+          <tr className="border-b-2 border-co-navy/80 text-xs font-extrabold text-co-navy">
+            <th className="py-2.5 pr-4">
+              <ConInfo termino="servicio_ideal">Servicio ideal</ConInfo>
+            </th>
+            <th className="px-4 py-2.5">
+              <ConInfo termino="pedidos">Pedidos</ConInfo>
+            </th>
+            <th className="px-4 py-2.5">
+              <ConInfo termino="en_su_tipo">En su tipo</ConInfo>
+            </th>
+            <th className="px-4 py-2.5">
+              <ConInfo termino="atendidos_alternativa">Con alternativa afín (a cuál)</ConInfo>
+            </th>
+            <th className="py-2.5 pl-4">
+              <ConInfo termino="desencuentros">Sin cupo</ConInfo>
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-co-line">
+          {demanda.map((d) => (
+            <tr key={d.ideal}>
+              <td className="py-3.5 pr-4 font-bold text-co-navy">{d.ideal_label}</td>
+              <td className="tabular px-4 py-3.5 font-semibold text-co-navy">{num(d.pedidos, 0)}</td>
+              <td className="tabular px-4 py-3.5 font-semibold text-co-navy">{num(d.atendidos_en_su_tipo, 0)}</td>
+              <td
+                className={`tabular px-4 py-3.5 font-bold ${d.atendidos_con_alternativa ? "text-co-teal" : "text-co-ink"}`}
+              >
+                {textoDesvio(d)}
+              </td>
+              <td
+                className={`tabular py-3.5 pl-4 font-bold ${d.sin_cupo ? "text-co-coral-ink" : "text-co-ink"}`}
+              >
+                {num(d.sin_cupo, 0)}
+              </td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-aura-border">
-            {demanda.map((d) => (
-              <tr key={d.ideal}>
-                <td className="px-6 py-3.5 font-semibold text-aura-navy">{d.ideal_label}</td>
-                <td className="px-4 py-3.5 text-aura-navy">{num(d.pedidos, 0)}</td>
-                <td className="px-4 py-3.5 text-aura-navy">{num(d.atendidos_en_su_tipo, 0)}</td>
-                <td className="px-4 py-3.5 text-aura-navy">{textoDesvio(d)}</td>
-                <td className="px-4 py-3.5 text-aura-navy">{num(d.sin_cupo, 0)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import CoordinacionShell from "@/components/coordinacion/CoordinacionShell";
+import DrawerServicio from "@/components/coordinacion/DrawerServicio";
 import { useApi } from "@/components/coordinacion/useApi";
 import FiltrosMapa from "@/components/coordinacion/mapa/FiltrosMapa";
 import MapaCiudad from "@/components/coordinacion/mapa/MapaCiudad";
-import PanelDetalleServicio from "@/components/coordinacion/mapa/PanelDetalleServicio";
-import TablaServicios from "@/components/coordinacion/mapa/TablaServicios";
 import { EstadoCarga, EstadoError } from "@/components/ui/Estados";
 import { getServicios } from "@/lib/api";
 import { FiltrosServicios } from "@/lib/types-coordinacion";
@@ -15,12 +13,9 @@ export default function MapaPage() {
   const [filtros, setFiltros] = useState<FiltrosServicios>({});
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
 
-  // Todos los servicios (opciones de los filtros y distritos del mapa) y los que cumplen los filtros.
+  // Todos los servicios (opciones del filtro y distritos del mapa) y los que cumplen los filtros.
   const todos = useApi(() => getServicios(), []);
-  const filtrados = useApi(
-    () => getServicios(filtros),
-    [filtros.tipo, filtros.canal, filtros.solo_alta_demanda],
-  );
+  const filtrados = useApi(() => getServicios(filtros), [filtros.tipo, filtros.solo_alta_demanda]);
 
   const visibles = filtrados.data?.features ?? [];
   useEffect(() => {
@@ -35,62 +30,31 @@ export default function MapaPage() {
   };
 
   return (
-    <CoordinacionShell activeHref="/coordinacion/mapa">
-      <div className="mx-auto max-w-6xl space-y-6 px-8 py-8">
-        <div>
-          <p className="text-xs font-bold tracking-wide text-aura-teal">
-            MAPA DE SERVICIOS
-          </p>
-          <h2 className="mt-1.5 text-3xl font-bold text-aura-navy">
-            Dónde está la demanda, servicio por servicio.
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-aura-gray">
-            Mapa ilustrativo: las posiciones respetan la ubicación relativa de
-            los servicios (datos sintéticos). El color indica el nivel de
-            ocupación de sus cupos liberados.
-          </p>
-        </div>
+    <div className="mx-auto max-w-[100rem] space-y-5">
+      <h1 className="text-3xl font-extrabold tracking-tight text-co-navy">Mapa de servicios</h1>
 
-        {error ? (
-          <EstadoError error={error} onRetry={reintentar} />
-        ) : !todos.data || !filtrados.data ? (
-          <EstadoCarga />
-        ) : (
-          <>
-            <FiltrosMapa
+      {error ? (
+        <EstadoError error={error} onRetry={reintentar} />
+      ) : !todos.data || !filtrados.data ? (
+        <EstadoCarga />
+      ) : (
+        // Con un servicio abierto, en pantallas anchas el panel es una columna y el mapa se reajusta.
+        <div className={seleccionado ? "gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_28rem]" : ""}>
+          <div className="min-w-0 space-y-5">
+            <FiltrosMapa todos={todos.data.features} filtros={filtros} onChange={setFiltros} />
+            <MapaCiudad
               todos={todos.data.features}
-              filtros={filtros}
-              onChange={setFiltros}
+              visibles={visibles}
+              seleccionadoId={seleccionado}
+              onSelect={setSeleccionado}
+              onLimpiarFiltros={() => setFiltros({})}
             />
-            <div
-              className={`grid gap-5 ${seleccionado ? "xl:grid-cols-[minmax(0,1fr)_22rem]" : ""}`}
-            >
-              <div className="overflow-hidden rounded-xl2 border border-aura-border bg-white shadow-card">
-                <MapaCiudad
-                  todos={todos.data.features}
-                  visibles={visibles}
-                  seleccionadoId={seleccionado}
-                  onSelect={setSeleccionado}
-                  onLimpiarFiltros={() => setFiltros({})}
-                />
-              </div>
-              {seleccionado && (
-                <PanelDetalleServicio
-                  serviceId={seleccionado}
-                  onClose={() => setSeleccionado(null)}
-                />
-              )}
-            </div>
-            {visibles.length > 0 && (
-              <TablaServicios
-                servicios={visibles}
-                seleccionadoId={seleccionado}
-                onSelect={setSeleccionado}
-              />
-            )}
-          </>
-        )}
-      </div>
-    </CoordinacionShell>
+          </div>
+          {seleccionado && (
+            <DrawerServicio serviceId={seleccionado} onClose={() => setSeleccionado(null)} />
+          )}
+        </div>
+      )}
+    </div>
   );
 }

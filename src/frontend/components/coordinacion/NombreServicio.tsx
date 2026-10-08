@@ -1,6 +1,5 @@
 import { Nivel } from "@/lib/types-coordinacion";
-import Tag from "@/components/ui/Tag";
-import { NIVEL_LABEL, NIVEL_TAG } from "./nivel";
+import { NIVEL_BG, NIVEL_INK, NIVEL_LABEL } from "./nivel";
 
 /**
  * Nombre del servicio (D6) junto con su tipo: nombres como «Espacio Brújula Orientación»
@@ -15,22 +14,25 @@ export default function NombreServicio({
   tipoLabel: string;
   apilado?: boolean;
 }) {
-  return (
-    <span
-      className={
-        apilado
-          ? "flex flex-col items-start gap-1"
-          : "inline-flex flex-wrap items-center gap-x-2 gap-y-1"
-      }
-    >
-      <span className="font-semibold text-aura-navy">{nombre}</span>
-      <span className="rounded-md bg-aura-teal-pale px-1.5 py-0.5 text-[11px] font-semibold text-aura-teal">
-        {tipoLabel}
-      </span>
+  return apilado ? (
+    <span className="flex flex-col">
+      <span className="font-bold text-co-navy">{nombre}</span>
+      <span className="text-xs font-semibold text-co-teal">{tipoLabel}</span>
+    </span>
+  ) : (
+    <span>
+      <span className="font-bold text-co-navy">{nombre}</span>
+      <span className="text-xs font-semibold text-co-teal"> · {tipoLabel}</span>
     </span>
   );
 }
 
+/** Nivel como punto de color + palabra (sin cápsula). */
 export function NivelTag({ nivel }: { nivel: Nivel }) {
-  return <Tag variant={NIVEL_TAG[nivel]}>{NIVEL_LABEL[nivel]}</Tag>;
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${NIVEL_INK[nivel]}`}>
+      <span className={`h-2 w-2 rounded-full ${NIVEL_BG[nivel]}`} aria-hidden="true" />
+      {NIVEL_LABEL[nivel]}
+    </span>
+  );
 }

@@ -36,10 +36,10 @@ export default function ReiniciarDemo() {
           ? "No se pudo reiniciar la demo; revisa el backend"
           : "Vuelve a sembrar la demo y recarga los datos"
       }
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-60 ${
+      className={`co-foco inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
         falla
-          ? "border-aura-tag-red-bg text-aura-tag-red-text"
-          : "border-aura-border text-aura-gray hover:text-aura-navy"
+          ? "text-co-coral-ink hover:bg-co-coral-tint"
+          : "text-co-ink hover:bg-co-teal-tint hover:text-co-navy"
       }`}
     >
       {reiniciando ? (
