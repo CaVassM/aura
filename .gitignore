@@ -32,3 +32,7 @@ __pycache__/
 # Material de referencia que no se sube al repo
 referencia_figma/
 Prototipo web AURA.zip
+
+# Logs del script iniciar
+logs/
+capturas/
