@@ -3,7 +3,8 @@
     python -m app.cli_chat                      # persona STU_DEMO_001
     python -m app.cli_chat --distrito DIST_GAIA --grupo diurno --modelo gemma4
 
-Comandos: /nuevo (empieza otra conversación), /citas (lista las citas), /salir.
+Comandos: /nuevo (empieza otra conversación), /citas (lista las citas), /desencuentros (los registrados
+por esta persona), /salir.
 Usa los mismos servicios que POST /api/chat; arrancar tarda unos segundos (siembra la demo).
 """
 
@@ -36,7 +37,7 @@ def main() -> None:
     print("Preparando la demo…")
     estado = crear_estado_sembrado(Settings.desde_entorno())
     servicio = ChatService(estado, AgenteAura(config))
-    print(f"Hoy (simulado): {estado.hoy}. Escribe tu mensaje. /nuevo, /citas, /salir.\n")
+    print(f"Hoy (simulado): {estado.hoy}. Escribe tu mensaje. /nuevo, /citas, /desencuentros, /salir.\n")
 
     sesion = None
     while True:
@@ -56,6 +57,13 @@ def main() -> None:
             for c in estado.citas.list_by_student(args.estudiante):
                 print(f"  {c.id} · {c.servicio_nombre} · {c.fecha} {c.hora_inicio} · {c.canal} · {c.estado}")
             print()
+            continue
+        if texto == "/desencuentros":
+            propios = [d for d in estado.desencuentros if d["estudiante_id"] == args.estudiante]
+            for d in propios:
+                franjas = "; ".join(f"{f['dia_semana']} {f['desde']}-{f['hasta']}" for f in d["franjas"])
+                print(f"  {d['registro_id']} · {d['motivo']} · {d['servicio_ideal']} · {d['distrito']} · franjas {franjas} (0=lun) · {','.join(d['canales_aceptables'])}")
+            print(f"  ({len(propios)} registrados)\n")
             continue
         try:
             r = servicio.conversar(texto, args.estudiante, sesion, args.distrito, args.grupo)
