@@ -7,10 +7,11 @@ import PortalShell from "@/components/PortalShell";
 import { usePerfil } from "@/components/campus/PerfilProvider";
 import TopbarControls from "@/components/campus/TopbarControls";
 import { campusBrand, campusNav } from "@/components/campus/nav";
-import { getDemoEstado } from "@/lib/api";
+import { darDeBajaAviso, getAvisoProactivo, getDemoEstado } from "@/lib/api";
 import { fechaConDia, fechaLarga } from "@/lib/format";
 import { nombreDistrito } from "@/lib/perfiles";
 import { SERVICIOS_UI } from "@/lib/servicios-ui";
+import { AvisoProactivo } from "@/lib/types";
 import { EstadoDemo } from "@/lib/types-coordinacion";
 
 const SERVICIOS = [
@@ -33,13 +34,30 @@ const SERVICIOS = [
 
 export default function CampusInicioPage() {
   const { perfil } = usePerfil();
-  const [mostrarAviso, setMostrarAviso] = useState(true);
+  // El aviso solo aparece si la regla lo decide para esta persona (semana de evaluaciones + señales) y no lo dio de baja.
+  const [aviso, setAviso] = useState<AvisoProactivo | null>(null);
   // La fecha es la de la demo (la simulación vive en el backend), no la del reloj del navegador.
   const [demo, setDemo] = useState<EstadoDemo | null>(null);
 
   useEffect(() => {
     getDemoEstado().then(setDemo).catch(() => setDemo(null));
   }, []);
+
+  useEffect(() => {
+    let vigente = true;
+    setAviso(null);
+    getAvisoProactivo(perfil.id)
+      .then((a) => vigente && setAviso(a))
+      .catch(() => vigente && setAviso(null));
+    return () => {
+      vigente = false;
+    };
+  }, [perfil.id]);
+
+  const ocultarAviso = () => {
+    setAviso((a) => (a ? { ...a, mostrar: false, descartado: true } : a));
+    darDeBajaAviso(perfil.id).catch(() => undefined);
+  };
 
   const subtitulo = demo ? fechaConDia(demo.hoy).replace(/^./, (c) => c.toUpperCase()) : `Hola, ${perfil.corto}`;
 
@@ -91,7 +109,7 @@ export default function CampusInicioPage() {
           </div>
 
           {/* Tarjeta proactiva de AURA */}
-          {mostrarAviso && (
+          {aviso?.mostrar && (
             <div
               className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-co-teal to-co-teal-deep px-7 py-8 text-white shadow-lift animate-rise"
               style={{ animationDelay: "160ms" }}
@@ -121,7 +139,7 @@ export default function CampusInicioPage() {
                     Hablar con AURA
                   </Link>
                   <button
-                    onClick={() => setMostrarAviso(false)}
+                    onClick={ocultarAviso}
                     className="co-foco rounded-full border border-white/30 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10"
                   >
                     Ahora no
@@ -130,7 +148,7 @@ export default function CampusInicioPage() {
 
                 <p className="mt-5 flex items-start gap-2 border-t border-white/15 pt-4 text-xs text-co-teal-tint">
                   <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                  Este aviso es opcional y aparece por el calendario académico. Puedes ocultarlo cuando quieras.
+                  Este aviso es opcional y aparece por la semana de evaluaciones. Si pulsas «Ahora no», no te lo volveremos a mostrar.
                 </p>
               </div>
             </div>

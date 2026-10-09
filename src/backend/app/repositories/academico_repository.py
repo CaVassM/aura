@@ -154,7 +154,7 @@ ESTUDIANTES: tuple[EstudianteAcademico, ...] = (
                    ((1, "18:00", "20:00"), (3, "18:00", "20:00")), (2, 6), 1, 5.2, 4.8),
             _curso("C3", "FIN230", "Finanzas Corporativas", "Dr. Ignacio Peralta", "Torre Nova · 2-01", 5,
                    ((0, "20:00", "22:00"), (4, "18:00", "20:00")), (3, 7), 2, 4.1, None),
-            _curso("C4", "ECO150", "Microeconomía Aplicada", "Lic. Renata Lugo", "Edificio Aurora · 208", 4,
+            _curso("C4", "ECO150", "Microeconomía Aplicada", "Lic. Renata Lugo", "Edificio Aurora · 208", 5,
                    ((2, "20:00", "22:00"),), (0,), 3, 5.0, 4.6),
             _curso("C5", "LID140", "Liderazgo y Equipos", "Mtra. Inés Bravo", "Edificio Aurora · 210", 3,
                    ((3, "20:00", "22:00"),), (), 4, 6.0, 5.5),
@@ -188,6 +188,9 @@ class AcademicoRepository:
     @classmethod
     def desde_data_pack(cls, carpeta: Path) -> "AcademicoRepository":
         return cls(cargar_d7(carpeta / "D7_calendar.csv"))
+
+    def estudiantes(self) -> tuple[EstudianteAcademico, ...]:
+        return ESTUDIANTES
 
     def estudiante(self, estudiante_id: str) -> EstudianteAcademico | None:
         return POR_ID.get(estudiante_id)

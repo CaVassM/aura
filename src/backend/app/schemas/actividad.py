@@ -49,6 +49,16 @@ class DesencuentroEvento(BaseModel):
     canales: list[str]
 
 
+class EsperaEvento(BaseModel):
+    id: str
+    motivo_label: str
+    servicio_ideal: str
+    servicio_ideal_label: str
+    distrito: str
+    franjas: str
+    cupo: str | None = Field(default=None, description="Solo en `lista_espera_aviso`: el cupo del que se avisó")
+
+
 class LoteEvento(BaseModel):
     id: int
     estado: Literal["abierto", "resuelto"]
@@ -70,16 +80,19 @@ class EventoActividad(BaseModel):
         "lote_abierto",
         "lote_solicitud",
         "lote_resuelto",
+        "lista_espera_alta",
+        "lista_espera_aviso",
     ]
     registrado_en: str = Field(description="Instante real del registro (ISO, UTC)")
     fecha_solicitud: str = Field(description="Fecha simulada de la demo en que ocurrió (`hoy`)")
-    origen: Literal["chat", "api", "lote"]
+    origen: Literal["chat", "api", "lote", "sistema"]
     estudiante_id: str | None = None
     servicio: ServicioEvento | None = None
     ocupacion: OcupacionEvento | None = None
     cita: CitaEvento | None = None
     desencuentro: DesencuentroEvento | None = None
     lote: LoteEvento | None = None
+    espera: EsperaEvento | None = None
     umbral_pct: float | None = Field(default=None, description="Umbral de modo lote (solo en eventos de servicio_en_lote)")
 
 

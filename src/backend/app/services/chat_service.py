@@ -27,6 +27,7 @@ from .errors import (
     SlotTakenError,
 )
 from .etiquetas import Etiquetas
+from .lista_espera_service import ListaEsperaService
 from .lote_service import LoteService
 
 if TYPE_CHECKING:  # el agente importa LangChain: se carga solo al usar el chat (ver deps.get_agente)
@@ -79,6 +80,13 @@ class PuertoPlataforma:
             return LoteService(self._estado).entrar(estudiante_id, solicitud, sesion_id, origen="chat")
         except PlatformError as error:
             return self._error(error)
+
+    def anotar_lista_espera(self, solicitud: dict, estudiante_id: str, sesion_id: str) -> dict:
+        try:
+            entrada = ListaEsperaService(self._estado).anotar(estudiante_id, solicitud, sesion_id, origen="chat")
+        except PlatformError as error:
+            return self._error(error)
+        return {"ok": True, "espera": {"id": entrada["id"], "servicio_ideal_label": entrada["servicio_ideal_label"], "franjas": entrada["franjas"]}}
 
     def asistencia(self, estudiante_id: str) -> dict:
         return AcademicoService(self._estado).asistencia_para_agente(estudiante_id)
@@ -137,7 +145,7 @@ class ChatService:
 
     def _respuesta(self, session_id: str, resultado) -> dict:
         opciones, cita, cancelada, desencuentro = [], None, None, False
-        lote, lote_oferta = None, None
+        lote, lote_oferta, lista_espera = None, None, None
         for evento in resultado.eventos:
             if not evento.ok:
                 continue
@@ -152,6 +160,8 @@ class ChatService:
                 lote, lote_oferta = evento.resultado["lote"], None
             elif evento.nombre == "registrar_desencuentro":
                 desencuentro = True
+            elif evento.nombre == "avisarme_si_hay_cupo":
+                lista_espera = evento.resultado["espera"]
         return {
             "session_id": session_id,
             "respuesta": resultado.respuesta,
@@ -161,6 +171,7 @@ class ChatService:
             "desencuentro_registrado": desencuentro,
             "lote": lote,
             "lote_oferta": lote_oferta,
+            "lista_espera": lista_espera,
             "alerta_crisis": resultado.crisis,
             "herramientas_usadas": [{"nombre": e.nombre, "ok": e.ok} for e in resultado.eventos],
         }

@@ -254,6 +254,26 @@ class AcademicoService:
         creditos = sum(cr for _, cr in pares)
         return _redondeo(sum(p * cr for p, cr in pares) / creditos, 1) if creditos else None
 
+    def indicadores_aviso(self, estudiante_id: str) -> dict:
+        """Lo que necesita el aviso proactivo (señales S1–S4): evaluación en curso, cambio de asistencia y de nota,
+        créditos y el corte de créditos del período. Es un cálculo de la plataforma; el agente no lo ve."""
+        est = self._estudiante(estudiante_id)
+        eventos = self._eventos_d7(est)
+        periodo = self._periodo(eventos)
+        general = self._promedio_general(est)
+        porcentaje = float(self._estado.parametros["aviso"]["percentil_carga_creditos"])
+        cargas = sorted(sum(c.creditos for c in e.cursos) for e in self._estado.academico.estudiantes())
+        pos = porcentaje * (len(cargas) - 1)  # percentil con interpolación lineal, sobre los estudiantes simulados
+        bajo = int(pos)
+        corte = cargas[bajo] + (cargas[min(bajo + 1, len(cargas) - 1)] - cargas[bajo]) * (pos - bajo)
+        return {
+            "en_evaluacion": periodo["evaluacion_actual"],
+            "variacion_asistencia": self._asistencia_general(est, eventos)["variacion"],
+            "variacion_nota": _redondeo(general - est.promedio_anterior, 1) if general is not None else None,
+            "creditos": sum(c.creditos for c in est.cursos),
+            "corte_creditos": corte,
+        }
+
     # --- vistas ---
 
     def cursos(self, estudiante_id: str) -> dict:

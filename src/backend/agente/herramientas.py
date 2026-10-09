@@ -371,6 +371,42 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             }
         )
 
+    def avisarme_si_hay_cupo() -> str:
+        if sesion.ultima_solicitud is None or (sesion.propuestas and not sesion.desencuentro_registrado):
+            resultado = {
+                "ok": False,
+                "error": "sin_busqueda_sin_cupo",
+                "detalle": "Solo se anota a la persona cuando la última búsqueda no tuvo opciones (o rechazó todas).",
+            }
+            registrar("avisarme_si_hay_cupo", False, resultado)
+            return _json(resultado)
+        ultima = next(
+            (m.content for m in reversed(sesion.mensajes)
+             if m.type == "ai" and isinstance(m.content, str) and m.content and not getattr(m, "tool_calls", None)),
+            "",
+        )
+        if not entrada.acepta_aviso(ctx.mensaje, ultima):
+            resultado = {
+                "ok": False,
+                "error": "falta_confirmacion",
+                "detalle": "La persona no pidió que le avises. Pregúntale si quiere que le avises aquí si se libera un cupo y espera su respuesta.",
+            }
+            registrar("avisarme_si_hay_cupo", False, resultado)
+            return _json(resultado)
+        resultado = puerto.anotar_lista_espera(sesion.ultima_solicitud, sesion.estudiante_id, sesion.id)
+        registrar("avisarme_si_hay_cupo", bool(resultado.get("ok")), resultado)
+        if not resultado.get("ok"):
+            return _json({"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")})
+        return _json(
+            {
+                "ok": True,
+                "indicacion": (
+                    "Quedó en la lista de espera. Dile que si se libera un cupo compatible le avisarás aquí mismo con la "
+                    "opción lista para reservar; no prometas día ni hora, ni que lo conseguirá."
+                ),
+            }
+        )
+
     def consultar_asistencia() -> str:
         textos = [m.content for m in sesion.mensajes if m.type == "human" and isinstance(m.content, str)]
         if not any(entrada.menciona_asistencia(t) for t in textos + [ctx.mensaje]):
@@ -421,6 +457,13 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
         registrar("registrar_desencuentro", bool(resultado.get("ok")), resultado)
         if resultado.get("ok"):
             sesion.desencuentro_registrado = True
+            resultado = {
+                **resultado,
+                "indicacion": (
+                    "Díselo con honestidad y pregúntale si quiere que le avises aquí si se libera un cupo compatible. "
+                    "Solo si dice que sí, usa `avisarme_si_hay_cupo`."
+                ),
+            }
         return _json(resultado)
 
     return [
@@ -460,6 +503,15 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             description=(
                 "Pone a la persona en el lote de asignación conjunta. Úsala SOLO después de que proponer_opciones "
                 "devolvió servicios_en_lote y la persona aceptó entrar."
+            ),
+            args_schema=SinArgs,
+        ),
+        StructuredTool.from_function(
+            func=avisarme_si_hay_cupo,
+            name="avisarme_si_hay_cupo",
+            description=(
+                "Anota a la persona en la lista de espera con su última búsqueda para avisarle aquí si se libera un cupo "
+                "compatible. Úsala SOLO cuando no hubo opciones (o rechazó todas) y la persona aceptó que le avises."
             ),
             args_schema=SinArgs,
         ),

@@ -22,7 +22,7 @@ Una **señal** es una condición que resume una parte de la trayectoria académi
 
 | Señal | Regla actual | Fuente |
 |---|---|---|
-| S1: alerta | `dropout_alert` es `medium` o `high`. | `aviso.dropout_alert`, [parametros.yaml](../config/parametros.yaml) |
+| S1: temporada | Hoy cae en una semana `evaluation_week` de D7 (en la plataforma; la validación sobre D3 usa todavía `dropout_alert` medio o alto). | `aviso.evento_evaluacion`, [parametros.yaml](../config/parametros.yaml) |
 | S2: asistencia | La tasa de asistencia actual bajó al menos **0,05** frente al período anterior. | `aviso.caida_asistencia`, [parametros.yaml](../config/parametros.yaml) |
 | S3: nota | `grade_change` es menor o igual que **−0,5**. | `aviso.cambio_nota`, [parametros.yaml](../config/parametros.yaml) |
 | S4: carga | Los créditos están en el cuartil superior del período (percentil **0,75**). | `aviso.percentil_carga_creditos`, [parametros.yaml](../config/parametros.yaml) |

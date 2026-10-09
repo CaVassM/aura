@@ -270,7 +270,9 @@ export type TipoEvento =
   | "servicio_sale_de_lote"
   | "lote_abierto"
   | "lote_solicitud"
-  | "lote_resuelto";
+  | "lote_resuelto"
+  | "lista_espera_alta"
+  | "lista_espera_aviso";
 
 export interface LoteEvento {
   id: number;
@@ -297,7 +299,7 @@ export interface EventoActividad {
   registrado_en: string;
   /** Fecha simulada de la demo en que ocurrió (`hoy`). */
   fecha_solicitud: string;
-  origen: "chat" | "api" | "lote";
+  origen: "chat" | "api" | "lote" | "sistema";
   estudiante_id: string | null;
   servicio: {
     service_id: string;
@@ -339,6 +341,16 @@ export interface EventoActividad {
     grupo_label: string;
     franjas: string;
     canales: string[];
+  } | null;
+  /** Lista de espera: alguien quedó esperando un cupo, o se le avisó de uno (`cupo`). */
+  espera: {
+    id: string;
+    motivo_label: string;
+    servicio_ideal: string;
+    servicio_ideal_label: string;
+    distrito: string;
+    franjas: string;
+    cupo: string | null;
   } | null;
 }
 

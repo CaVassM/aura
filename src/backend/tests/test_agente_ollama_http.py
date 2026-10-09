@@ -93,7 +93,7 @@ def test_chat_de_punta_a_punta_con_chatollama(settings, estado_fresco, ollama_fa
     assert primero["model"] == "gemma4" and primero["options"]["num_ctx"] == config.num_ctx
     assert primero["think"] is False and primero["keep_alive"] == "45m"
     assert {t["function"]["name"] for t in primero["tools"]} == {
-        "proponer_opciones", "reservar_cita", "cancelar_cita", "listar_mis_citas", "registrar_desencuentro", "entrar_a_lote", "consultar_asistencia",
+        "proponer_opciones", "reservar_cita", "cancelar_cita", "listar_mis_citas", "registrar_desencuentro", "entrar_a_lote", "consultar_asistencia", "avisarme_si_hay_cupo",
     }
     assert primero["messages"][0]["role"] == "system" and "AURA" in primero["messages"][0]["content"]
     assert primero["messages"][-1] == {"role": "user", "content": "Tengo parciales y estoy agobiada, puedo el miércoles por videollamada"}

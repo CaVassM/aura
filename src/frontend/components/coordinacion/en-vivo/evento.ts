@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarCheck, CalendarX, Layers, LucideIcon, PackageCheck, PackagePlus, Users } from "lucide-react";
+import { AlertTriangle, BellRing, CalendarCheck, CalendarX, Hourglass, Layers, LucideIcon, PackageCheck, PackagePlus, Users } from "lucide-react";
 import { bloqueFecha, distritoLabel, num, rangoHoras } from "@/lib/format";
 import { EventoActividad, TipoEvento } from "@/lib/types-coordinacion";
 
@@ -79,12 +79,31 @@ export const META_EVENTO: Record<
     tinta: "text-co-teal-dark",
     borde: "border-co-teal",
   },
+  lista_espera_alta: {
+    label: "En lista de espera",
+    corto: "Espera",
+    icono: Hourglass,
+    solido: "bg-co-amber",
+    tinte: "bg-co-amber-tint",
+    tinta: "text-co-amber-ink",
+    borde: "border-co-amber",
+  },
+  lista_espera_aviso: {
+    label: "Aviso de cupo enviado",
+    corto: "Aviso",
+    icono: BellRing,
+    solido: "bg-co-sage",
+    tinte: "bg-co-sage-tint",
+    tinta: "text-co-sage-ink",
+    borde: "border-co-sage",
+  },
 };
 
 export const ORIGEN_LABEL: Record<EventoActividad["origen"], string> = {
   chat: "AURA · chat",
   api: "API",
   lote: "Lote",
+  sistema: "Sistema",
 };
 
 /** "mié 25 nov · 10:00 – 11:00 · Videollamada" (citas) o lo que pedía la persona (desencuentros). */
@@ -96,6 +115,9 @@ export function detalleEvento(e: EventoActividad): string {
   if (e.desencuentro) {
     const d = e.desencuentro;
     return `${d.motivo_label} · pedía ${d.franjas}`;
+  }
+  if (e.espera) {
+    return e.espera.cupo ? `Se le avisó de: ${e.espera.cupo}` : `${e.espera.motivo_label} · espera ${e.espera.franjas}`;
   }
   if (e.tipo === "servicio_en_lote" || e.tipo === "servicio_sale_de_lote") {
     const o = e.ocupacion;
@@ -117,6 +139,7 @@ export function detalleEvento(e: EventoActividad): string {
 export function lugarEvento(e: EventoActividad): string {
   if (e.servicio) return `${e.servicio.nombre} · ${distritoLabel(e.servicio.distrito)}`;
   if (e.desencuentro) return `${e.desencuentro.servicio_ideal_label} · ${distritoLabel(e.desencuentro.distrito)}`;
+  if (e.espera) return `${e.espera.servicio_ideal_label} · ${distritoLabel(e.espera.distrito)}`;
   if (e.lote) return `Lote ${e.lote.id}`;
   return "";
 }

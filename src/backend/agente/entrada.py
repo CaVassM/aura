@@ -100,3 +100,21 @@ _ASISTENCIA = re.compile(_colapsar(
 def menciona_asistencia(mensaje: str) -> bool:
     """¿La persona habló de su asistencia a clases en este mensaje? Frena que el modelo consulte ese dato por su cuenta."""
     return bool(_ASISTENCIA.search(_plano(mensaje)))
+
+
+_ACEPTA_AVISO = re.compile(_colapsar(
+    r"\b(avis\w*|notific\w*|escrib\w*|inform\w*|dime|dig\w*|anot\w*|apunt\w*|lista de espera)\b.*"
+    r"\b(cupo|cupos|espacio|liber\w*|disponib\w*|hay|abra|abran|espera)\b"
+))
+
+
+def acepta_aviso(mensaje: str, ultima_respuesta: str) -> bool:
+    """¿La persona pidió que se le avise si se libera un cupo? Nombrándolo («avísame si se libera») o con un «sí» a una
+    pregunta del agente que hablaba de avisar. Un «no» al comienzo lo niega."""
+    plano = _plano(mensaje)
+    if _NEGATIVA.search(plano):
+        return False
+    if _ACEPTA_AVISO.search(plano):
+        return True
+    previa = _plano(ultima_respuesta)
+    return "avis" in previa and ("cupo" in previa or "liber" in previa) and bool(_AFIRMA.search(plano))

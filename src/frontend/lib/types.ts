@@ -74,11 +74,41 @@ export interface LoteOferta {
 export interface AvisoEstudiante {
   id: number;
   estudiante_id: string;
-  tipo: "lote_en_espera" | "lote_asignada" | "lote_sin_cupo" | "lote_error";
+  tipo: "lote_en_espera" | "lote_asignada" | "lote_sin_cupo" | "lote_error" | "cupo_disponible";
   registrado_en: string;
   lote_id?: number;
   mensaje?: string;
   cita?: Cita;
+  /** `cupo_disponible`: el cupo que se liberó (opción lista para tocar). */
+  opciones?: Opcion[];
+  espera_id?: string;
+}
+
+/** Una persona en la lista de espera (GET /api/estudiantes/{id}/lista-espera). */
+export interface Espera {
+  id: string;
+  estudiante_id: string;
+  estado: "esperando" | "avisada" | "cancelada";
+  creada_en: string;
+  avisada_en: string | null;
+  motivo_label: string;
+  servicio_ideal: string;
+  servicio_ideal_label: string;
+  distrito: string;
+  franjas: string;
+  canales: string[];
+  opcion: Opcion | null;
+}
+
+/** GET /api/estudiantes/{id}/aviso-proactivo: ¿se le muestra la tarjeta «un espacio para ti»? */
+export interface AvisoProactivo {
+  mostrar: boolean;
+  elegible: boolean;
+  descartado: boolean;
+  puntaje: number;
+  minimo: number;
+  senales: { id: string; nombre: string; cumple: boolean }[];
+  semana: { titulo: string; inicio: string; fin: string; intensidad: number; dias_para_inicio: number } | null;
 }
 
 /** Respuesta de POST /api/chat. */
@@ -91,6 +121,7 @@ export interface ChatRespuesta {
   desencuentro_registrado: boolean;
   lote: LoteEstado | null;
   lote_oferta: LoteOferta | null;
+  lista_espera: { id: string; servicio_ideal_label: string; franjas: string } | null;
   alerta_crisis: boolean;
   herramientas_usadas: HerramientaUsada[];
 }
@@ -109,6 +140,8 @@ export interface ChatMessage {
   cita?: Cita;
   citaCancelada?: Cita;
   desencuentro?: boolean;
+  /** La persona quedó en la lista de espera: se le avisará aquí si se libera un cupo. */
+  listaEspera?: boolean;
   /** La persona quedó esperando en este lote. */
   lote?: LoteEstado;
   /** Se ofrece entrar al lote (todo lo compatible está en modo lote). */

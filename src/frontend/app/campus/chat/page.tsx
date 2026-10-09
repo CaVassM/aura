@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, MapPin, PanelRightOpen, RotateCcw, Send, X } from "lucide-react";
+import { BellRing, ChevronLeft, MapPin, PanelRightOpen, RotateCcw, Send, X } from "lucide-react";
 import PortalShell from "@/components/PortalShell";
 import { usePerfil } from "@/components/campus/PerfilProvider";
 import TopbarControls from "@/components/campus/TopbarControls";
@@ -154,6 +154,7 @@ export default function ChatPage() {
             cita: res.cita ?? undefined,
             citaCancelada: res.cita_cancelada ?? undefined,
             desencuentro: res.desencuentro_registrado || undefined,
+            listaEspera: !!res.lista_espera || undefined,
             lote: res.lote ?? undefined,
             loteOferta: res.lote_oferta ?? undefined,
             crisis: res.alerta_crisis || undefined,
@@ -179,6 +180,7 @@ export default function ChatPage() {
         role: "agent",
         text: aviso.mensaje as string,
         cita: aviso.cita,
+        opciones: aviso.opciones,
         aviso: aviso.tipo,
         error: aviso.tipo === "lote_error" || undefined,
       },
@@ -320,7 +322,7 @@ export default function ChatPage() {
                     )}
                     {m.lote && (
                       <div className="ml-0 max-w-xl sm:ml-11">
-                        <LoteEnEspera lote={m.lote} resuelto={mensajes.slice(indice + 1).some((x) => !!x.aviso)} />
+                        <LoteEnEspera lote={m.lote} resuelto={mensajes.slice(indice + 1).some((x) => x.aviso?.startsWith("lote_") && x.aviso !== "lote_en_espera")} />
                       </div>
                     )}
                     {m.cita && (
@@ -332,6 +334,12 @@ export default function ChatPage() {
                       <div className="ml-0 max-w-xl sm:ml-11">
                         <CitaCancelada cita={m.citaCancelada} />
                       </div>
+                    )}
+                    {m.listaEspera && (
+                      <p className="inline-flex items-center gap-1.5 rounded-md bg-co-teal-tint px-3 py-1.5 text-xs font-bold text-co-teal-dark animate-rise sm:ml-11">
+                        <BellRing size={13} aria-hidden="true" />
+                        Estás en la lista de espera: te avisaré aquí si se libera un cupo.
+                      </p>
                     )}
                     {m.desencuentro && (
                       <p className="inline-block rounded-md bg-co-amber-tint sm:ml-11 px-3 py-1.5 text-xs font-bold text-co-amber-ink animate-rise">

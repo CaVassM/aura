@@ -8,7 +8,7 @@
  * Todo el estado vive en la RAM del backend: si se reinicia, se pierden citas y conversaciones.
  */
 
-import { AvisoEstudiante, ChatRespuesta, Cita, HistorialChat } from "./types";
+import { AvisoEstudiante, AvisoProactivo, ChatRespuesta, Cita, Espera, HistorialChat } from "./types";
 import { RespuestaCalendario, RespuestaCalificaciones, RespuestaCursos } from "./types-academico";
 import {
   ActividadRespuesta,
@@ -208,3 +208,20 @@ export const getCalificaciones = (estudianteId: string) =>
 
 export const getCalendario = (estudianteId: string) =>
   request<RespuestaCalendario>(academico(estudianteId, "calendario"));
+
+// --- Aviso proactivo y lista de espera ---
+
+const estudiante = (id: string) => `/api/estudiantes/${encodeURIComponent(id)}`;
+
+export const getAvisoProactivo = (estudianteId: string) =>
+  request<AvisoProactivo>(`${estudiante(estudianteId)}/aviso-proactivo`);
+
+/** La persona no quiere ver el aviso: se recuerda en el backend hasta reiniciar la demo. */
+export const darDeBajaAviso = (estudianteId: string) =>
+  request<AvisoProactivo>(`${estudiante(estudianteId)}/aviso-proactivo/baja`, undefined, { method: "POST" });
+
+export const getListaEspera = (estudianteId: string) =>
+  request<{ esperas: Espera[] }>(`${estudiante(estudianteId)}/lista-espera`).then((r) => r.esperas);
+
+export const salirListaEspera = (estudianteId: string, esperaId: string) =>
+  request<Espera>(`${estudiante(estudianteId)}/lista-espera/${encodeURIComponent(esperaId)}`, undefined, { method: "DELETE" });

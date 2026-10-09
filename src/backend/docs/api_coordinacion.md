@@ -568,10 +568,10 @@ Cinco bloques en solo lectura; los valores técnicos de los datos llegan traduci
     "senales": [
       {
         "id": "S1",
-        "nombre": "Alerta de abandono",
-        "descripcion": "La alerta de abandono es media o alta.",
-        "umbral": ["medium", "high"],
-        "umbral_texto": "media o alta"
+        "nombre": "Temporada de evaluación",
+        "descripcion": "Hoy cae en una semana de evaluaciones del calendario académico (D7).",
+        "umbral": "evaluation_week",
+        "umbral_texto": "una semana de evaluaciones"
       },
       {
         "id": "S2",

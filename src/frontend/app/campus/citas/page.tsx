@@ -2,18 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarClock, Clock, MapPin, MessageCircle, Sparkles } from "lucide-react";
+import { BellRing, CalendarClock, Clock, Hourglass, MapPin, MessageCircle, Sparkles } from "lucide-react";
 import PortalShell from "@/components/PortalShell";
 import { usePerfil } from "@/components/campus/PerfilProvider";
 import TopbarControls from "@/components/campus/TopbarControls";
 import { useAvisos } from "@/components/campus/useAvisos";
 import { campusBrand, campusNav } from "@/components/campus/nav";
 import { EstadoError } from "@/components/ui/Estados";
-import { cancelarCita, getMisCitas } from "@/lib/api";
+import { cancelarCita, getListaEspera, getMisCitas, salirListaEspera } from "@/lib/api";
 import { bloqueFecha, fechaConDia, primeraMayuscula, rangoHoras } from "@/lib/format";
 import { nombreDistrito } from "@/lib/perfiles";
 import { canalUi, estiloServicio } from "@/lib/servicios-ui";
-import { Cita } from "@/lib/types";
+import { Cita, Espera } from "@/lib/types";
 
 function TarjetaCita({
   cita,
@@ -136,6 +136,48 @@ function TarjetaCita({
   );
 }
 
+function TarjetaEspera({ espera, indice, onSalir }: { espera: Espera; indice: number; onSalir: (e: Espera) => void }) {
+  const [saliendo, setSaliendo] = useState(false);
+  const avisada = espera.estado === "avisada";
+  return (
+    <article
+      style={{ animationDelay: `${indice * 80}ms` }}
+      className="relative overflow-hidden rounded-2xl border border-dashed border-co-amber/60 bg-white/80 px-5 py-4 shadow-card animate-rise"
+    >
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${avisada ? "bg-co-sage-tint text-co-sage-ink" : "bg-co-amber-tint text-co-amber-ink animate-breathe"}`}>
+          {avisada ? <BellRing size={18} aria-hidden="true" /> : <Hourglass size={18} aria-hidden="true" />}
+        </span>
+        <div className="min-w-0 flex-1 basis-56">
+          <p className="text-sm font-extrabold text-co-navy">
+            {avisada ? "Te avisamos de un cupo" : "En lista de espera"} · {espera.servicio_ideal_label}
+          </p>
+          <p className="text-xs font-semibold text-co-ink">
+            Pedías {espera.franjas} · {nombreDistrito(espera.distrito)}
+          </p>
+          {avisada && (
+            <Link href="/campus/chat" className="co-foco text-xs font-bold text-co-teal-dark underline">
+              Ver el cupo en el chat
+            </Link>
+          )}
+        </div>
+        {!avisada && (
+          <button
+            onClick={() => {
+              setSaliendo(true);
+              onSalir(espera);
+            }}
+            disabled={saliendo}
+            className="co-foco rounded-full border border-co-line px-4 py-2 text-sm font-bold text-co-ink transition hover:border-co-coral hover:bg-co-coral-tint hover:text-co-coral-ink disabled:opacity-60"
+          >
+            Salir de la lista
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function Esqueleto() {
   return (
     <div className="space-y-3" aria-hidden="true">
@@ -150,19 +192,32 @@ export default function MisCitasPage() {
   const { perfil } = usePerfil();
   const [citas, setCitas] = useState<Cita[] | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [esperas, setEsperas] = useState<Espera[]>([]);
+
+  const cargarEsperas = useCallback(() => {
+    getListaEspera(perfil.id).then(setEsperas).catch(() => setEsperas([]));
+  }, [perfil.id]);
 
   const cargar = useCallback(() => {
     setCitas(null);
     setError(null);
     getMisCitas(perfil.id).then(setCitas).catch(setError);
-  }, [perfil.id]);
+    cargarEsperas();
+  }, [perfil.id, cargarEsperas]);
 
   useEffect(cargar, [cargar]);
 
   // Si un lote se resuelve mientras miras esta pantalla, la cita nueva aparece sola.
   useAvisos(perfil.id, (aviso) => {
     if (aviso.tipo === "lote_asignada") getMisCitas(perfil.id).then(setCitas).catch(() => undefined);
+    if (aviso.tipo === "cupo_disponible") cargarEsperas();
   });
+
+  const salirDeLaLista = (e: Espera) =>
+    salirListaEspera(perfil.id, e.id)
+      .then(() => setEsperas((l) => l.filter((x) => x.id !== e.id)))
+      .catch(() => undefined);
+  const enEspera = esperas.filter((e) => e.estado !== "cancelada");
 
   const alCancelar = (cancelada: Cita) =>
     setCitas((lista) => lista?.map((c) => (c.id === cancelada.id ? cancelada : c)) ?? null);
@@ -194,6 +249,7 @@ export default function MisCitasPage() {
           ) : citas === null ? (
             <Esqueleto />
           ) : citas.length === 0 ? (
+            <>
             <div className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-co-line bg-white/70 px-8 py-20 text-center animate-rise">
               <span className="flex h-14 w-14 animate-breathe items-center justify-center rounded-full bg-co-teal-tint text-co-teal">
                 <CalendarClock size={26} aria-hidden="true" />
@@ -210,10 +266,17 @@ export default function MisCitasPage() {
                 Hablar con AURA
               </Link>
             </div>
+              {enEspera.map((e, i) => (
+                <TarjetaEspera key={e.id} espera={e} indice={i} onSalir={salirDeLaLista} />
+              ))}
+            </>
           ) : (
             <>
               {citas.map((c, i) => (
                 <TarjetaCita key={c.id} cita={c} indice={i} onCancelada={alCancelar} />
+              ))}
+              {enEspera.map((e, i) => (
+                <TarjetaEspera key={e.id} espera={e} indice={citas.length + i} onSalir={salirDeLaLista} />
               ))}
               <Link
                 href="/campus/chat"

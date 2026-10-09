@@ -113,3 +113,34 @@ def test_asistencia_para_el_agente_no_trae_notas(estado_sembrado):
     for prohibido in ("nota", "promedio", "credito", "alerta", "riesgo", "docente", "aula"):
         assert prohibido not in texto
     assert AcademicoService(estado_sembrado).asistencia_para_agente("STU_AE_1")["ok"] is False
+
+
+def test_aviso_proactivo_se_muestra_solo_a_quien_cumple_la_regla(client_fresco):
+    def estado(id_):
+        return client_fresco.get(f"/api/estudiantes/{id_}/aviso-proactivo").json()
+
+    def cumplen(a):
+        return {s["id"] for s in a["senales"] if s["cumple"]}
+
+    lucia, mateo, diego = estado("STU_DEMO_001"), estado("STU_DEMO_002"), estado("STU_DEMO_004")
+    # Hoy es semana de evaluaciones: S1 la cumplen todos; el resto depende de cada persona
+    assert cumplen(lucia) == {"S1", "S2", "S3", "S4"} and lucia["mostrar"] and lucia["puntaje"] == 4
+    assert cumplen(diego) == {"S1", "S2", "S4"} and diego["mostrar"] and diego["minimo"] == 3
+    assert cumplen(mateo) == {"S1"} and not mateo["elegible"] and not mateo["mostrar"]
+    assert lucia["semana"]["inicio"] == "2026-11-09"
+
+
+def test_aviso_proactivo_baja_y_reactivacion(client_fresco):
+    base = "/api/estudiantes/STU_DEMO_001/aviso-proactivo"
+    baja = client_fresco.post(f"{base}/baja").json()
+    assert baja["descartado"] and baja["elegible"] and not baja["mostrar"]
+    assert not client_fresco.get(base).json()["mostrar"]  # se recuerda
+    assert client_fresco.get("/api/estudiantes/STU_DEMO_004/aviso-proactivo").json()["mostrar"]  # solo la suya
+    assert client_fresco.delete(f"{base}/baja").json()["mostrar"]
+    assert client_fresco.get("/api/estudiantes/STU_AE_000008/aviso-proactivo").status_code == 404
+
+
+def test_reiniciar_la_demo_borra_las_bajas(client_fresco):
+    client_fresco.post("/api/estudiantes/STU_DEMO_001/aviso-proactivo/baja")
+    client_fresco.post("/api/demo/reiniciar")
+    assert client_fresco.get("/api/estudiantes/STU_DEMO_001/aviso-proactivo").json()["mostrar"]

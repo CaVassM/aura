@@ -102,6 +102,7 @@ El modelo las llama solo; no son endpoints. Están en `agente/herramientas.py` y
 | `listar_mis_citas` | — | Lista las citas de la persona |
 | `entrar_a_lote` | — | Pone a la persona en el lote abierto (lo abre si no hay). Solo después de `proponer_opciones` → `servicios_en_lote` **y** si la persona aceptó (mismo tipo de bloqueo que cancelar) |
 | `consultar_asistencia` | — | Lee la **asistencia a clases** de la persona (período actual, anterior y por curso). Es el **único** dato académico que ve el agente; se niega (`no_pidio_asistencia`) si la persona no habló de su asistencia o sus faltas |
+| `avisarme_si_hay_cupo` | — | Anota a la persona en la **lista de espera** con su última búsqueda. Solo cuando no hubo opciones (o rechazó todas) **y** la persona aceptó que le avise (mismo bloqueo `falta_confirmacion`) |
 | `registrar_desencuentro` | — | Avisa que no hubo opción: guarda la última búsqueda (solo después de `proponer_opciones`) |
 
 `proponer_opciones` se **niega a buscar** (`faltan_datos`) si en la conversación la persona no ha mencionado días ni canal (`agente/entrada.py`; basta una mención, incluso «cualquier día» o «da igual»). Es una red de seguridad contra modelos pequeños que inventan esos datos; el agente debe preguntárselos (tolera letras repetidas por error de tipeo). Del mismo modo, `cancelar_cita` se niega (`falta_confirmacion`) si el mensaje no pide cancelar ni responde «sí» a una pregunta de cancelar. Cada opción llega al modelo con un `texto` ya redactado (servicio, día, fecha, hora y canal) para que lo copie.
@@ -127,6 +128,27 @@ Alimentan las páginas `Mis cursos`, `Calificaciones` y `Calendario` del campus.
 `404 no_encontrado` si la persona no es un perfil de la demo. «Hoy» es el de la demo (`GET /api/demo/estado`, 15 nov 2026, último día de las evaluaciones intermedias).
 
 Supuestos de la simulación (no salen de los datos): sin clases en las semanas de evaluación de D7; los exámenes parciales y finales caen dentro de esas semanas; asistencia mínima de **70 %**; escala 1,0–7,0 como `average_grade` de D3 y aprobación en 4,0; las inasistencias y notas son inventadas (Lucía y Diego tienen caída de asistencia frente al período anterior, para ilustrar la señal S2; Mateo y Valentina no).
+
+## Lista de espera y aviso proactivo
+
+**Lista de espera.** Si no hay cupo, el agente registra el desencuentro y pregunta si quiere que le avise; si dice que sí, queda anotada. Cada vez que se **cancela una cita** (lo único que libera cupos) se revisa la lista en orden de llegada: a quien le sirva un cupo libre (sin contar servicios en modo lote) le llega un aviso `cupo_disponible` por `/avisos/stream` con la opción lista para tocar, y la opción queda como «opción 1» de su conversación. No retiene el cupo: avisa y la persona decide; un mismo cupo se avisa a una sola persona. En Coordinación aparece en *En vivo* (`lista_espera_alta` y `lista_espera_aviso`).
+
+| Método | Ruta | Para qué |
+|---|---|---|
+| POST | `/api/appointments/lista-espera` | Anotarse por API (cuerpo como `proposals`); repetir la misma no la duplica |
+| GET | `/api/estudiantes/{id}/lista-espera` | Sus esperas: `esperando`, `avisada` (con la `opcion`) o `cancelada` |
+| DELETE | `/api/estudiantes/{id}/lista-espera/{espera_id}` | Salir de la lista |
+
+`POST /chat` devuelve además `lista_espera` (`{id, …}`) cuando la persona quedó anotada en ese mensaje. Hoy el aviso es solo dentro del campus; no hay mensajería externa (WhatsApp u otra).
+
+**Aviso proactivo** (la tarjeta «un espacio para ti» del Inicio). Cuatro señales de 1 punto; mínimo **3** y solo en semana de evaluaciones (D7): S1 temporada de evaluación, S2 caída de asistencia ≥ 0,05, S3 caída de nota ≤ −0,5, S4 créditos en el cuartil superior. Sin alerta de abandono (viene de un dato sintético). Se calcula con los datos académicos simulados; la tarjeta se justifica por contexto y la persona puede darla de baja (se recuerda en RAM hasta reiniciar la demo).
+
+| Método | Ruta | Para qué |
+|---|---|---|
+| GET | `/api/estudiantes/{id}/aviso-proactivo` | `{mostrar, elegible, descartado, puntaje, minimo, senales[], semana}` |
+| POST / DELETE | `/api/estudiantes/{id}/aviso-proactivo/baja` | Darlo de baja / reactivarlo |
+
+En la demo, Lucía cumple S1–S4 (4 puntos) y Diego S1, S2 y S4 (3); Mateo y Valentina solo S1.
 
 ## Instalar y probar en tu PC
 

@@ -18,6 +18,7 @@ from .avisos_repository import AvisosRepository
 from .chat_repository import ChatRepository
 from .cita_repository import CitaRepository
 from .geo_d6 import cargar_geo_d6
+from .lista_espera_repository import ListaEsperaRepository
 from .lote_repository import LoteRepository
 
 
@@ -36,6 +37,8 @@ class AppState:
     avisos: AvisosRepository = field(default_factory=AvisosRepository)
     lotes: LoteRepository = field(default_factory=LoteRepository)
     academico: AcademicoRepository = field(default_factory=AcademicoRepository)
+    lista_espera: ListaEsperaRepository = field(default_factory=ListaEsperaRepository)
+    bajas_aviso: set = field(default_factory=set)  # estudiantes que dieron de baja el aviso proactivo
     siembra: dict = field(default_factory=dict)
     lock: RLock = field(default_factory=RLock)
 

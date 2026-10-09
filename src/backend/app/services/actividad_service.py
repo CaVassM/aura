@@ -43,6 +43,30 @@ class ActividadService:
             },
         )
 
+    def lista_espera(self, tipo: str, entrada: dict, origen: str) -> dict:
+        """`lista_espera_alta` (alguien quedó esperando un cupo) y `lista_espera_aviso` (se le avisó de uno)."""
+        opcion = entrada.get("opcion") if tipo == "lista_espera_aviso" else None
+        return self._estado.actividad.agregar(
+            tipo,
+            {
+                **self._base(origen, entrada["estudiante_id"]),
+                "espera": {
+                    "id": entrada["id"],
+                    "motivo_label": entrada["motivo_label"],
+                    "servicio_ideal": entrada["servicio_ideal"],
+                    "servicio_ideal_label": entrada["servicio_ideal_label"],
+                    "distrito": entrada["distrito"],
+                    "franjas": entrada["franjas"],
+                    "cupo": (
+                        f"{opcion['servicio_nombre']} · {self._etiquetas.fecha_texto(opcion['fecha'])}, "
+                        f"{opcion['hora_inicio']}–{opcion['hora_fin']}"
+                        if opcion
+                        else None
+                    ),
+                },
+            },
+        )
+
     # --- lectura ---
 
     def listar(self, desde: int = 0, limite: int = 200) -> dict:

@@ -38,6 +38,9 @@ class ChatOut(BaseModel):
     lote_oferta: LoteOfertaOut | None = Field(
         default=None, description="Todo lo compatible está en servicios en modo lote: el agente ofrece entrar al lote"
     )
+    lista_espera: dict | None = Field(
+        default=None, description="La persona quedó en la lista de espera: se le avisará aquí si se libera un cupo (`{id, ...}`)"
+    )
     alerta_crisis: bool = Field(default=False, description="El mensaje activó el protocolo de ayuda inmediata")
     herramientas_usadas: list[HerramientaUsadaOut] = []
 

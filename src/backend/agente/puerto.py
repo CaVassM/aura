@@ -23,6 +23,9 @@ class PuertoAgenda(Protocol):
     def entrar_a_lote(self, solicitud: dict, estudiante_id: str, sesion_id: str) -> dict:
         """`{"ok": True, "lote": {id, estado, posicion, solicitudes, tamano_maximo, cierra_en}}` o `{"ok": False, ...}`."""
 
+    def anotar_lista_espera(self, solicitud: dict, estudiante_id: str, sesion_id: str) -> dict:
+        """`{"ok": True, "espera": {id, ...}}` o `{"ok": False, ...}`: avisar a la persona si se libera un cupo que le sirva."""
+
     def asistencia(self, estudiante_id: str) -> dict:
         """Lo único académico que ve el agente: `{"ok": True, "asistencia_actual": ..., "cursos": [...]}` o `{"ok": False, ...}`.
         Solo asistencia: sin notas, créditos ni alertas."""

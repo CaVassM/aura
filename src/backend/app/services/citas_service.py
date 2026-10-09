@@ -4,6 +4,7 @@ from ..models import Cita
 from ..repositories.app_state import AppState
 from .actividad_service import ActividadService
 from .etiquetas import Etiquetas
+from .lista_espera_service import ListaEsperaService
 from .lote_service import LoteService
 from .errors import InvalidRequestError, NotFoundError, SlotTakenError
 
@@ -75,6 +76,7 @@ class CitasService:
                 self._estado.motor.cancelar_cita(cita_id)
                 cita.estado = "cancelada"
                 self._actividad.cita_cancelada(cita, origen)
+                ListaEsperaService(self._estado).revisar()  # el cupo liberado puede servirle a alguien que espera
             return cita
 
     def registrar_desencuentro(self, solicitud: dict, origen: str = "api") -> dict:

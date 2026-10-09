@@ -61,6 +61,11 @@ function Fila({ e, reciente }: { e: EventoActividad; reciente: boolean }) {
               Sin cupo de {e.desencuentro.servicio_ideal_label}
               <span className="text-xs font-semibold text-co-amber-ink"> · {distritoLabel(e.desencuentro.distrito)}</span>
             </>
+          ) : e.espera ? (
+            <>
+              {e.espera.servicio_ideal_label}
+              <span className="text-xs font-semibold text-co-amber-ink"> · {distritoLabel(e.espera.distrito)}</span>
+            </>
           ) : (
             <>Lote {e.lote?.id}</>
           )}
@@ -140,6 +145,7 @@ export default function EnVivoPage() {
   const canceladas = eventos.filter((e) => e.tipo === "cita_cancelada").length;
   const desencuentros = eventos.filter((e) => e.tipo === "desencuentro").length;
   const lotes = eventos.filter((e) => e.tipo === "lote_resuelto").length;
+  const enEspera = eventos.filter((e) => e.tipo === "lista_espera_alta").length;
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
@@ -147,7 +153,7 @@ export default function EnVivoPage() {
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-co-navy">En vivo</h1>
           <p className="mt-1 max-w-2xl text-sm font-medium leading-relaxed text-co-ink">
-            Cada cita que un estudiante reserva o cancela, cada solicitud sin cupo y cada novedad del modo lote aparecen
+            Cada cita que un estudiante reserva o cancela, cada solicitud sin cupo, cada persona en lista de espera y cada novedad del modo lote aparecen
             aquí al instante. Solo se
             registra lo nuevo: las citas que ya vienen cargadas en la demo no figuran en este registro.
           </p>
@@ -162,11 +168,12 @@ export default function EnVivoPage() {
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Contador titulo="Citas nuevas" valor={reservadas} tinte="bg-co-sage-tint" tinta="text-co-sage-ink" />
         <Contador titulo="Canceladas" valor={canceladas} tinte="bg-co-coral-tint" tinta="text-co-coral-ink" />
         <Contador titulo="Desencuentros" valor={desencuentros} tinte="bg-co-amber-tint" tinta="text-co-amber-ink" />
         <Contador titulo="Lotes resueltos" valor={lotes} tinte="bg-co-teal-tint" tinta="text-co-teal-dark" />
+        <Contador titulo="En lista de espera" valor={enEspera} tinte="bg-co-amber-tint" tinta="text-co-amber-ink" />
       </div>
 
       <Seccion titulo="Registro de citas nuevas" acento="bg-co-teal">
