@@ -16,6 +16,7 @@ aura/
     ├── frontend/             # interfaz Next.js (Entregable 2)
     └── backend/              # API de plataforma (MVC) + motor de asignación, todo en RAM
         ├── app/              #   plataforma (api, schemas, services, repositories, models)
+        ├── agente/           #   agente conversacional (LangChain + Ollama)
         ├── aura/             #   motor: algoritmo genético, herramientas del agente, filtros de aviso
         ├── config/           #   parámetros y tablas editables
         ├── data_pack/        #   D1, D2, D6 y D7
@@ -29,6 +30,7 @@ aura/
 - Contrato de la API de Coordinación: [src/backend/docs/api_coordinacion.md](src/backend/docs/api_coordinacion.md)
 - Frontend: [src/frontend/README.md](src/frontend/README.md)
 - Cómo funciona el motor: [src/backend/docs/como_funciona.md](src/backend/docs/como_funciona.md)
+- Agente conversacional (endpoints, parámetros, instalación con Ollama): [src/backend/docs/api_agente.md](src/backend/docs/api_agente.md)
 - Contrato de herramientas del agente: [src/backend/docs/contrato_herramientas.md](src/backend/docs/contrato_herramientas.md)
 - Resultados clave para el concurso: [src/backend/docs/resultados_clave.md](src/backend/docs/resultados_clave.md)
 - Decisiones pendientes del equipo: [src/backend/docs/decisiones_pendientes.md](src/backend/docs/decisiones_pendientes.md)

@@ -26,9 +26,10 @@ class ServicioAsignacion:
 
     def esquemas_herramientas(self) -> list[dict]:
         """Declaraciones name/description/parameters para el tool calling de un LLM."""
-        return esquemas_herramientas()
+        distritos = sorted({s.distrito for s in self._agenda.servicios})
+        return esquemas_herramientas(distritos, list(self._agenda.tablas["motivo_a_servicio"]))
 
-    def ejecutar_herramienta(self, nombre: str, argumentos: dict) -> dict:
+    def ejecutar_herramienta(self, nombre: str, argumentos: dict | str | None) -> dict:
         """Ejecuta una llamada de herramienta tal como la emite el LLM."""
         return self._herramientas.ejecutar(nombre, argumentos)
 
@@ -42,9 +43,9 @@ class ServicioAsignacion:
         """Reserva la opción si su cupo sigue libre."""
         return self._herramientas.reservar(estudiante_id, opcion_id, servicio_ideal)
 
-    def cancelar_cita(self, cita_id: str) -> dict:
-        """Cancela una cita y libera su cupo."""
-        return self._herramientas.cancelar_cita(cita_id)
+    def cancelar_cita(self, cita_id: str, estudiante_id: str | None = None) -> dict:
+        """Cancela una cita y libera su cupo (con `estudiante_id`, solo su dueño puede)."""
+        return self._herramientas.cancelar_cita(cita_id, estudiante_id)
 
     def registrar_desencuentro(self, solicitud: dict) -> dict:
         """Registra en RAM una solicitud sin opción compatible."""

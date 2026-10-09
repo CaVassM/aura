@@ -33,6 +33,9 @@ class Etiquetas:
     def dia(self, indice: int) -> str:
         return self._e["dias_semana"][indice]
 
+    def dia_largo(self, indice: int) -> str:
+        return self._e["dias_semana_largo"][indice]
+
     def dias_texto(self, indices: list[int]) -> str:
         """`Lun–Vie` si los días son consecutivos (3 o más); si no, `Lun, Mié`."""
         dias = sorted(set(indices))

@@ -114,12 +114,13 @@ class AgendaViva:
         cupo_id, separador, canal = opcion_id.partition("|")
         ocupados = self.cupos_ocupados()
         cupo = self.cupo_por_id.get(cupo_id)
-        if (
-            not separador
-            or cupo is None
-            or cupo_id in ocupados
-            or canal not in cupo.canales
-        ):
+        if not separador or cupo is None or canal not in cupo.canales:
+            return {
+                "ok": False,
+                "error": "opcion_invalida",
+                "detalle": "El opcion_id debe ser uno de los que entregó proponer_opciones (`<cupo>|<canal>`)",
+            }
+        if cupo_id in ocupados:
             return {"ok": False, "error": "cupo_ya_tomado"}
         solicitada = fecha_solicitud or self.hoy
         if not solicitada < cupo.fecha <= solicitada + timedelta(days=self.ventana_dias):
@@ -132,9 +133,13 @@ class AgendaViva:
         self.reservas[cita_id] = cita
         return {"ok": True, "cita": cita}
 
-    def cancelar(self, cita_id: str) -> dict:
-        """Libera una cita existente; una cita inexistente devuelve un error claro."""
-        if cita_id not in self.reservas:
+    def cancelar(self, cita_id: str, estudiante_id: str | None = None) -> dict:
+        """Libera una cita existente; una cita inexistente devuelve un error claro.
+
+        Si se indica `estudiante_id`, solo su dueño puede cancelarla.
+        """
+        cita = self.reservas.get(cita_id)
+        if cita is None or (estudiante_id and cita["estudiante_id"] != estudiante_id):
             return {"ok": False, "error": "cita_no_encontrada"}
         del self.reservas[cita_id]
         return {"ok": True, "cita_id": cita_id}

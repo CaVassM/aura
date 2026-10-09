@@ -1,0 +1,6 @@
+# Agente conversacional (LangChain + Ollama). Se instala encima de requirements.txt:
+#   pip install -r requirements-agente.txt
+-r requirements.txt
+langchain>=1.0,<2          # create_agent (bucle de herramientas)
+langchain-ollama>=1.0,<2   # ChatOllama
+python-dotenv>=1.0         # lee el archivo .env (opcional)

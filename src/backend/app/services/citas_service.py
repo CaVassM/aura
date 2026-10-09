@@ -30,6 +30,8 @@ class CitasService:
             resultado = self._estado.motor.reservar(estudiante_id, opcion_id, servicio_ideal)
             if resultado.get("error") == "cupo_fuera_de_ventana":
                 raise InvalidRequestError("El cupo está fuera de la ventana de reserva (hoy + 1 a hoy + 14 días)")
+            if resultado.get("error") == "opcion_invalida":
+                raise InvalidRequestError(resultado.get("detalle", "opcion_id no válido"))
             if not resultado["ok"]:
                 raise SlotTakenError(opcion_id)
             return self._estado.citas.add(Cita.desde_comprobante(resultado["cita"], self._etiquetas.tipo))
