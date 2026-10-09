@@ -121,6 +121,8 @@ ollama serve                                  # si Ollama no está abierto ya
 uvicorn app.main:app --reload --port 8080     # Swagger: http://localhost:8080/docs
 ```
 
+Con `iniciar.bat` (raíz del repo) todo esto se hace solo: instala `requirements-agente.txt`, inicia Ollama si no está abierto, avisa si falta el modelo y muestra el estado del agente al arrancar.
+
 Sin frontend, desde la terminal: `python -m app.cli_chat --distrito DIST_GAIA` (muestra también qué herramientas llamó el modelo).
 
 Si el backend arranca sin `requirements-agente.txt`, todo funciona excepto `/api/chat`, que responde `503` con el comando de instalación.

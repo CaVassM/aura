@@ -6,7 +6,7 @@ Sus resultados son apoyo operativo: no diagnostica ni reemplaza una decisión hu
 
 ## Cómo correrlo
 
-En Windows, desde esta carpeta, doble clic en `iniciar.bat` (o `.\iniciar.bat` en la terminal). Prepara el entorno de Python y las dependencias de Node si faltan, levanta el backend (http://localhost:8080) y el frontend (http://localhost:3000) y abre el panel de Coordinación. `Ctrl+C` detiene los dos; `.\iniciar.bat -Detener` cierra lo que haya quedado. Requiere Python 3.10+ y Node 18+. Los logs quedan en `logs/`.
+En Windows, desde esta carpeta, doble clic en `iniciar.bat` (o `.\iniciar.bat` en la terminal). Prepara el entorno de Python (backend **y** agente conversacional: LangChain + langchain-ollama) y las dependencias de Node si faltan, comprueba Ollama (lo inicia si no está abierto y avisa si falta el modelo), levanta el backend (http://localhost:8080) y el frontend (http://localhost:3000) y abre el panel de Coordinación; el chat del estudiante queda en http://localhost:3000/campus/chat. `Ctrl+C` detiene los servidores (y Ollama, si lo inició el script); `.\iniciar.bat -Detener` cierra lo que haya quedado en los puertos 8080 y 3000. Requiere Python 3.10+, Node 18+ y [Ollama](https://ollama.com) con el modelo descargado (`ollama pull gemma4`, o el que pongas en `AURA_OLLAMA_MODEL` en `src\backend\.env`; ver [docs/api_agente.md](src/backend/docs/api_agente.md)). El agente corre dentro del backend: no hay otro proceso que levantar. Sin Ollama, todo funciona salvo el chat. Los logs quedan en `logs/`.
 
 ## Árbol del proyecto
 
