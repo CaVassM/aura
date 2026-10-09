@@ -7,7 +7,7 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage
 
 from .config import ConfigAgente
-from .crisis import MENSAJE_CRISIS, detectar_crisis
+from .crisis import detectar_crisis, mensaje_crisis
 from .errores import AgenteNoDisponible
 from .herramientas import ContextoTurno, EventoHerramienta, construir_herramientas
 from .prompt import construir_prompt
@@ -93,9 +93,10 @@ class AgenteAura:
 
     def responder(self, sesion: SesionChat, mensaje: str, puerto: PuertoAgenda, hoy: date) -> ResultadoTurno:
         if detectar_crisis(mensaje):
-            sesion.mensajes += [HumanMessage(mensaje), AIMessage(MENSAJE_CRISIS)]
+            texto = mensaje_crisis(self.config.linea_ayuda)
+            sesion.mensajes += [HumanMessage(mensaje), AIMessage(texto)]
             sesion.tocar()
-            return ResultadoTurno(MENSAJE_CRISIS, crisis=True)
+            return ResultadoTurno(texto, crisis=True)
 
         ctx = ContextoTurno(sesion, puerto, mensaje)
         agente = create_agent(

@@ -2,7 +2,8 @@
 
 No sustituye el criterio del modelo (el prompt también le indica qué hacer): es una red de
 seguridad determinista para que ante estas frases la persona siempre vea los recursos de ayuda.
-El texto y las líneas de ayuda son un SUPUESTO por validar con Bienestar (ver decisiones_pendientes.md).
+La red (Aethera) es ficticia: el texto no nombra líneas reales; la línea propia se configura con AURA_LINEA_AYUDA
+(ver decisiones_pendientes.md).
 """
 
 import re
@@ -34,14 +35,23 @@ _SENALES = [
 ]
 _PATRON = re.compile(re.sub(r"([a-z])\1+", r"\1", "|".join(_SENALES)))
 
-MENSAJE_CRISIS = (
-    "Lamento mucho que estés pasando por esto, y me alegra que me lo cuentes. Tu seguridad es lo más "
-    "importante ahora. Si sientes que puedes hacerte daño o estás en peligro, busca ayuda inmediata: "
-    "llama a la Línea 113, opción 5 (salud mental, MINSA, gratuita), o acude a la emergencia del hospital "
-    "más cercano. Si hay alguien de confianza cerca, avísale y no te quedes a solas. "
-    "Yo no puedo brindarte atención de crisis, pero sí puedo ayudarte a agendar con el servicio de "
-    "bienestar cuando quieras. ¿Quieres que lo hagamos?"
-)
+LINEA_POR_DEFECTO = "la línea de ayuda de tu institución"
+
+
+def mensaje_crisis(linea_ayuda: str = "") -> str:
+    """Texto fijo de ayuda inmediata. `linea_ayuda` (p. ej. «la Línea de Bienestar 0800-123») sale de AURA_LINEA_AYUDA."""
+    linea = linea_ayuda.strip() or LINEA_POR_DEFECTO
+    return (
+        "Lamento mucho que estés pasando por esto, y me alegra que me lo cuentes. Tu seguridad es lo más "
+        "importante ahora. Si sientes que puedes hacerte daño o estás en peligro, busca ayuda inmediata: "
+        f"comunícate ahora con los servicios de emergencia de tu zona o con {linea}, o acude al centro de "
+        "salud más cercano. Si hay alguien de confianza cerca, avísale y no te quedes a solas. "
+        "Yo no puedo brindarte atención de crisis, pero sí puedo ayudarte a agendar con el servicio de "
+        "bienestar cuando quieras. ¿Quieres que lo hagamos?"
+    )
+
+
+MENSAJE_CRISIS = mensaje_crisis()
 
 
 def _sin_tildes(texto: str) -> str:

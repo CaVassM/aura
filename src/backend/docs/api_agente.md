@@ -48,7 +48,7 @@ Respuesta `200`:
 | `cita` | objeto \| null | Cita reservada en este mensaje (mismo formato que `CitaOut` de `/appointments`) |
 | `cita_cancelada` | objeto \| null | Cita cancelada en este mensaje |
 | `desencuentro_registrado` | bool | El agente avisó al equipo que no había opción compatible |
-| `alerta_crisis` | bool | El mensaje activó el protocolo de ayuda inmediata (la respuesta es un texto fijo con líneas de ayuda; no se llamó al modelo) |
+| `alerta_crisis` | bool | El mensaje activó el protocolo de ayuda inmediata (la respuesta es un texto fijo que remite a emergencias y a la línea de ayuda de la institución; no se llamó al modelo) |
 | `herramientas_usadas` | lista | `[{"nombre": "proponer_opciones", "ok": true}, …]`, en orden. Útil para depurar |
 
 ```json
@@ -136,6 +136,7 @@ Si el backend arranca sin `requirements-agente.txt`, todo funciona excepto `/api
 | `AURA_OLLAMA_TIMEOUT` | `120` | Segundos de espera por respuesta del modelo |
 | `AURA_OLLAMA_REASONING` | vacío | `false` apaga el «pensar» del modelo (más rápido); `true` lo enciende; vacío usa el comportamiento del modelo |
 | `AURA_OLLAMA_KEEP_ALIVE` | `30m` | Tiempo que el modelo queda cargado en memoria sin uso |
+| `AURA_LINEA_AYUDA` | vacío | Línea de ayuda propia de la red, que se nombra en el mensaje de crisis. Vacío: «la línea de ayuda de tu institución» |
 | `AURA_AGENTE_MAX_PASOS` | `10` | Llamadas al modelo por mensaje antes de rendirse |
 | `AURA_AGENTE_MAX_TURNOS` | `12` | Mensajes de la persona que recuerda el agente |
 

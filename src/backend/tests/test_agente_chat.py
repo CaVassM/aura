@@ -199,7 +199,7 @@ def test_desencuentro_usa_la_ultima_busqueda_sin_que_el_modelo_la_repita(montar,
 def test_crisis_responde_con_ayuda_sin_llamar_al_modelo(montar):
     cliente, modelo = montar(lambda m: AIMessage("no debería llamarse"))
     r = cliente.post("/api/chat", json={"mensaje": "A veces pienso en quitarme la vida", "estudiante_id": "E1"}).json()
-    assert r["alerta_crisis"] and "113" in r["respuesta"]
+    assert r["alerta_crisis"] and "emergencia" in r["respuesta"]
     assert modelo.llamadas == 0 and r["opciones"] == []
 
 
