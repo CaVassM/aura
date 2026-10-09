@@ -314,7 +314,8 @@ export default function ChatPage() {
                       <div className="ml-0 max-w-xl sm:ml-11">
                         <LoteOfertaCard
                           oferta={m.loteOferta}
-                          activa={m.id === ultimaOferta && !yaEntro && !enviando}
+                          conOpciones={!!m.opciones?.length}
+                          activa={m.id === ultimaOferta && !yaEntro && !enviando && !mensajes.slice(indiceOferta + 1).some((x) => x.cita)}
                           onEntrar={() => enviar("Sí, quiero entrar al lote")}
                           onCambiar={() => campo.current?.focus()}
                         />

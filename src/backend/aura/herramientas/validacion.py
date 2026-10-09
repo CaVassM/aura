@@ -152,5 +152,6 @@ def convertir_solicitud(
         fecha,
         grupo,
         motivo,
+        bool(entrada.get("solo_servicio_ideal", False)),
     )
     return solicitud, tipo_ideal

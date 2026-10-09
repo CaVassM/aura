@@ -56,6 +56,8 @@ class Solicitud:
     fecha_solicitud: date
     grupo: str
     motivo: str = ""
+    # La persona solo quiere el servicio ideal: no se le asignan servicios alternativos (afinidad < 1).
+    solo_servicio_ideal: bool = False
 
 
 @dataclass(frozen=True)

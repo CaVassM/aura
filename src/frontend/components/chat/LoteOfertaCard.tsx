@@ -10,11 +10,14 @@ export default function LoteOfertaCard({
   activa,
   onEntrar,
   onCambiar,
+  conOpciones = false,
 }: {
   oferta: LoteOferta;
   activa: boolean;
   onEntrar: () => void;
   onCambiar: () => void;
+  /** El lote se ofrece junto a opciones de otro servicio compatible (el que la persona quiere está en lote). */
+  conOpciones?: boolean;
 }) {
   return (
     <div
@@ -28,7 +31,9 @@ export default function LoteOfertaCard({
           <Layers size={18} aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-co-amber-ink">Servicios muy ocupados</p>
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-co-amber-ink">
+            {conOpciones ? "¿Prefieres ese servicio?" : "Servicios muy ocupados"}
+          </p>
           <p className="mt-0.5 text-sm font-bold leading-snug text-co-navy">
             {oferta.servicios.length ? oferta.servicios.join(" · ") : "Los servicios compatibles"} superan el {Math.round(oferta.umbral_pct)} % de
             ocupación.
@@ -55,7 +60,7 @@ export default function LoteOfertaCard({
             onClick={onCambiar}
             className="co-foco rounded-full border border-co-line bg-white px-4 py-2.5 text-sm font-bold text-co-ink transition hover:border-co-teal hover:text-co-navy"
           >
-            Prefiero cambiar mis horarios
+            {conOpciones ? "Me quedo con las opciones de arriba" : "Prefiero cambiar mis horarios"}
           </button>
         </div>
       )}

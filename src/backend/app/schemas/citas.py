@@ -19,6 +19,9 @@ class SolicitudIn(BaseModel):
     canales_aceptables: list[str] = Field(min_length=1, examples=[["digital", "phone"]])
     grupo: str = Field(default="diurno", pattern="^(diurno|nocturno)$")
     fecha_solicitud: str | None = None
+    solo_servicio_ideal: bool = Field(
+        default=False, description="La persona no acepta otro servicio que el ideal para su motivo (sin alternativos)"
+    )
 
 
 class ReservaIn(BaseModel):
@@ -63,6 +66,10 @@ class PropuestaOut(BaseModel):
     servicio_ideal: str | None = None
     motivo_vacio: str | None = None
     lote: LoteOfertaOut | None = None
+    lote_para_ideal: bool = Field(
+        default=False,
+        description="Hay opciones directas (de otro servicio) y además el servicio ideal tiene plazas en lote: se puede entrar a él",
+    )
 
 
 class ServicioOut(BaseModel):

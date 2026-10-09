@@ -225,6 +225,7 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
                     "que son las fechas más cercanas; no digas que son de ese día."
                 )
         sesion.lote_disponible = False
+        sesion.lote_solo_ideal = False
         if resultado.get("motivo_vacio") == "servicios_en_lote":
             # Los servicios compatibles están en modo lote: no hay opciones para elegir; se ofrece el lote.
             sesion.ultima_solicitud = solicitud
@@ -262,6 +263,19 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
         sesion.desencuentro_registrado = False
         sesion.propuestas = {o["opcion_id"]: o for o in resultado["opciones"]}
         registrar("proponer_opciones", True, resultado)
+        oferta_lote = None
+        if resultado["opciones"] and resultado.get("lote"):
+            # Lo directo son servicios alternativos; el servicio ideal sí tiene plazas, pero en lote. Quien quiera
+            # específicamente ese servicio puede entrar al lote (y entonces no se le asigna otro).
+            sesion.lote_disponible = True
+            sesion.lote_solo_ideal = True
+            lote = resultado["lote"]
+            oferta_lote = {
+                "servicios": lote["servicios"],
+                "umbral_pct": lote["umbral_pct"],
+                "cierra_solo_en_segundos": lote["ventana_s"],
+                "solicitudes_esperando": lote["pendientes"],
+            }
         if not resultado["opciones"]:
             return _json(
                 {
@@ -273,13 +287,20 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
                     ),
                 }
             )
-        return _json(
-            {
-                "opciones": [_opcion_para_modelo(i, o) for i, o in enumerate(resultado["opciones"], 1)],
-                "indicacion": aviso_fecha
-                or "Muestra cada opción con su `texto`, numeradas, y pregunta cuál prefiere. Di siempre la fecha completa de cada una.",
-            }
+        indicacion = aviso_fecha or (
+            "Muestra cada opción con su `texto`, numeradas, y pregunta cuál prefiere. Di siempre la fecha completa de cada una."
         )
+        if oferta_lote:
+            indicacion += (
+                " Además, el servicio que mejor le conviene (" + ", ".join(oferta_lote["servicios"]) + ") tiene plazas pero "
+                "está muy ocupado y se reparte por LOTE (se asigna en conjunto y se cierra solo en unos segundos). Dile que "
+                "estas opciones son de otro servicio compatible y que, si prefiere específicamente ese, puede entrar al "
+                "lote (el día y la hora los decide el lote). Solo si dice que quiere el lote, usa `entrar_a_lote`."
+            )
+        datos = {"opciones": [_opcion_para_modelo(i, o) for i, o in enumerate(resultado["opciones"], 1)], "indicacion": indicacion}
+        if oferta_lote:
+            datos["lote"] = oferta_lote
+        return _json(datos)
 
     def reservar_cita(numero: int) -> str:
         opciones = list(sesion.propuestas.values())
@@ -302,6 +323,7 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
                 {"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")}
             )
         sesion.propuestas = {}
+        sesion.lote_disponible = False
         return _json({"ok": True, "cita": _cita_para_modelo(resultado["cita"])})
 
     def cancelar_cita(cita_id: str) -> str:
@@ -336,7 +358,7 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             resultado = {
                 "ok": False,
                 "error": "sin_oferta_de_lote",
-                "detalle": "Solo se entra al lote cuando proponer_opciones dijo que todo está en servicios_en_lote.",
+                "detalle": "Solo se entra al lote cuando proponer_opciones ofreció el lote (servicios_en_lote o `lote` junto a las opciones).",
             }
             registrar("entrar_a_lote", False, resultado)
             return _json(resultado)
@@ -353,7 +375,9 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             }
             registrar("entrar_a_lote", False, resultado)
             return _json(resultado)
-        resultado = puerto.entrar_a_lote(sesion.ultima_solicitud, sesion.estudiante_id, sesion.id)
+        # Si el lote se ofreció junto a opciones de otro servicio, quien entra quiere ese servicio y no otro.
+        solicitud = {**sesion.ultima_solicitud, **({"solo_servicio_ideal": True} if sesion.lote_solo_ideal else {})}
+        resultado = puerto.entrar_a_lote(solicitud, sesion.estudiante_id, sesion.id)
         registrar("entrar_a_lote", bool(resultado.get("ok")), resultado)
         if not resultado.get("ok"):
             return _json({"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")})
@@ -502,7 +526,7 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             name="entrar_a_lote",
             description=(
                 "Pone a la persona en el lote de asignación conjunta. Úsala SOLO después de que proponer_opciones "
-                "devolvió servicios_en_lote y la persona aceptó entrar."
+                "ofreció el lote (servicios_en_lote, o `lote` junto a las opciones) y la persona aceptó entrar."
             ),
             args_schema=SinArgs,
         ),

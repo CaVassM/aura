@@ -63,7 +63,7 @@ class LoteService:
 
         solicitud = {**solicitud, "estudiante_id": estudiante_id}
         propuesta = CitasService(self._e).proponer(solicitud, 1)
-        if propuesta.get("motivo_vacio") != "servicios_en_lote":
+        if not propuesta.get("lote"):  # sin oferta de lote: o hay opciones directas o no hay nada
             detalle = (
                 "Hay opciones directas: reserva una; el lote es solo para servicios con ocupación alta."
                 if propuesta["opciones"]

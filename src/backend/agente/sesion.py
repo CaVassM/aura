@@ -23,6 +23,7 @@ class SesionChat:
     ultima_solicitud: dict | None = None  # para registrar el desencuentro sin que el modelo la repita
     desencuentro_registrado: bool = False
     lote_disponible: bool = False  # la última búsqueda solo encontró servicios en modo lote
+    lote_solo_ideal: bool = False  # el lote se ofreció junto a opciones: quien entra quiere ese servicio, no otro
     lote_id: int | None = None  # lote en el que quedó esperando
     actualizada_en: str = ""
 

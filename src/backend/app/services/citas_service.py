@@ -37,6 +37,14 @@ class CitasService:
                     "servicio_ideal": con_lote["servicio_ideal"],
                     "lote": {**lotes.info_oferta(), "servicios": nombres[:3]},
                 }
+        elif resultado["opciones"] and en_lote and not any(not o["es_alternativa"] for o in resultado["opciones"]):
+            # Lo que se muestra son servicios alternativos, pero el servicio ideal sí tiene plazas: están en lote.
+            # Quien quiere ese servicio y no otro puede entrar al lote; se ofrece junto a las opciones directas.
+            del_ideal = self._estado.motor.proponer_opciones({**solicitud, "solo_servicio_ideal": True}, 20)
+            nombres = list(dict.fromkeys(o["servicio_nombre"] for o in del_ideal["opciones"] if o["service_id"] in en_lote))
+            if nombres:
+                resultado["lote"] = {**lotes.info_oferta(), "servicios": nombres[:3]}
+                resultado["lote_para_ideal"] = True
         for opcion in resultado["opciones"]:
             opcion["tipo_label"] = self._etiquetas.tipo(opcion["tipo"])
         return resultado

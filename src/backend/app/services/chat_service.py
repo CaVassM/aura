@@ -151,7 +151,7 @@ class ChatService:
                 continue
             if evento.nombre == "proponer_opciones":
                 opciones = evento.resultado["opciones"]
-                lote_oferta = evento.resultado.get("lote") if evento.resultado.get("motivo_vacio") == "servicios_en_lote" else None
+                lote_oferta = evento.resultado.get("lote")  # sin opciones, o junto a ellas si el servicio ideal está en lote
             elif evento.nombre == "reservar_cita":
                 cita, opciones = self._cita_out(evento.resultado["cita"]), []
             elif evento.nombre == "cancelar_cita":

@@ -187,3 +187,42 @@ def test_entrar_exige_una_solicitud_valida(client_fresco, todo_en_lote):
 def test_el_servicio_expone_la_oferta_del_lote(estado_fresco):
     info = LoteService(estado_fresco).info_oferta()
     assert info == {"umbral_pct": 75.0, "ventana_s": 30, "tamano_maximo": 5, "abierto": False, "pendientes": 0, "cierra_en": None}
+
+
+@pytest.fixture()
+def consejeria_en_lote(estado_fresco, monkeypatch):
+    """Solo los servicios de consejería en modo lote: lo directo son servicios alternativos (pares, vocacional)."""
+    ids = {s["service_id"] for s in estado_fresco.motor.servicios() if s["tipo"] == "counseling"}
+    monkeypatch.setattr(LoteService, "servicios_en_lote", lambda self: ids)
+    estado_fresco.parametros["lote"].update({"ventana_segundos": 60, "tamano_maximo": 2})
+    return ids
+
+
+TODOS_LOS_CANALES = ["digital", "phone", "in_person"]
+
+
+def test_si_el_servicio_ideal_esta_en_lote_se_ofrece_el_lote_junto_a_las_alternativas(client_fresco, consejeria_en_lote):
+    pedido = de("E1", distrito="DIST_NEBULA", canales_aceptables=TODOS_LOS_CANALES)
+    r = client_fresco.post("/api/appointments/proposals?k=5", json=pedido).json()
+    assert r["opciones"] and all(o["es_alternativa"] for o in r["opciones"])  # lo directo es de otro servicio
+    assert r["lote_para_ideal"] is True and r["lote"]["servicios"]
+    # y se puede entrar al lote aunque haya opciones directas
+    entrada = client_fresco.post("/api/appointments/lote", json=pedido)
+    assert entrada.status_code == 201, entrada.text
+
+
+def test_quien_entra_al_lote_por_su_servicio_no_recibe_otro(client_fresco, estado_fresco, consejeria_en_lote):
+    solicitud = de("E1", distrito="DIST_NEBULA", canales_aceptables=TODOS_LOS_CANALES, solo_servicio_ideal=True)
+    # con «solo el servicio ideal» las opciones directas desaparecen: no hay alternativos
+    directas = client_fresco.post("/api/appointments/proposals?k=5", json=solicitud).json()
+    assert directas["opciones"] == [] and directas["motivo_vacio"] == "servicios_en_lote"
+    assert client_fresco.post("/api/appointments/lote", json=solicitud).status_code == 201
+    client_fresco.post("/api/appointments/lote", json={**solicitud, "estudiante_id": "E2"})
+    assert esperar(lambda: lotes(client_fresco)["historial"]), "el lote debía cerrarse solo"
+    citas = [c for e in ("E1", "E2") for c in client_fresco.get("/api/appointments", params={"estudiante_id": e}).json()]
+    assert citas and all(c["tipo"] == "counseling" for c in citas)  # solo consejería, nunca un alternativo
+
+
+def test_sin_servicio_ideal_en_lote_no_se_ofrece_lote_junto_a_opciones(client_fresco):
+    r = client_fresco.post("/api/appointments/proposals?k=5", json=de("E1", distrito="DIST_NEBULA")).json()
+    assert r["opciones"] and not r["lote_para_ideal"] and r["lote"] is None
