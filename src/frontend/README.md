@@ -97,6 +97,20 @@ aparecen. Detalle del contrato: `src/backend/docs/api_coordinacion.md` (sección
 
 Para grabarlo: `/campus/chat` en una ventana (como cualquier perfil del selector) y `/coordinacion` en otra.
 
+### Modo lote
+
+Cuando un servicio llega al 75 % de utilización, sus cupos solo se reparten por **lote** (se cierra solo y asigna
+con el algoritmo genético; reglas en `src/backend/docs/como_funciona.md` §8).
+
+- **Coordinación → Lotes** (`/coordinacion/lotes`): los 15 servicios con la marca del 75 %, el lote abierto con su
+  cuenta regresiva y las solicitudes que lleva, y el historial con la comparación genético vs orden de llegada.
+  «En vivo» muestra también cuándo un servicio cruza el umbral y cada novedad del lote.
+- **Estudiante** (`/campus/chat`): si todo lo compatible está en modo lote, el chat muestra una tarjeta con el botón
+  «Entrar al lote»; al aceptar aparece un anillo con la cuenta regresiva y, cuando el lote se cierra, la cita llega
+  sola al chat (y a «Mis citas») por el flujo de avisos, sin enviar ningún mensaje.
+
+Para el video: abre `/campus/chat` en dos ventanas (como dos perfiles del selector) y `/coordinacion/lotes` en otra.
+
 ### Cómo se ve el chat
 
 - Al abrir, AURA saluda y avisa qué distrito usa; hay sugerencias para empezar.

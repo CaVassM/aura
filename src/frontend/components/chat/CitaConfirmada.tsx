@@ -16,7 +16,7 @@ function datosCita(cita: Cita) {
 }
 
 /** Comprobante de una cita recién reservada: tarjeta teal con check animado y barrido de luz. */
-export function CitaConfirmada({ cita }: { cita: Cita }) {
+export function CitaConfirmada({ cita, etiqueta = "Cita confirmada" }: { cita: Cita; etiqueta?: string }) {
   const { fecha, inicio, canal } = datosCita(cita);
   const IconoCanal = canal.icono;
   return (
@@ -32,7 +32,7 @@ export function CitaConfirmada({ cita }: { cita: Cita }) {
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-co-teal-tint">Cita confirmada</p>
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-co-teal-tint">{etiqueta}</p>
           <p className="mt-0.5 truncate text-lg font-extrabold leading-tight">{cita.servicio_nombre}</p>
           <p className="text-sm text-co-teal-tint">{cita.tipo_label}</p>
         </div>

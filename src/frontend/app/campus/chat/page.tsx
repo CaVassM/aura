@@ -6,15 +6,18 @@ import { ChevronLeft, MapPin, PanelRightOpen, RotateCcw, Send, X } from "lucide-
 import PortalShell from "@/components/PortalShell";
 import { usePerfil } from "@/components/campus/PerfilProvider";
 import TopbarControls from "@/components/campus/TopbarControls";
+import { useAvisos } from "@/components/campus/useAvisos";
 import { campusBrand, campusNav } from "@/components/campus/nav";
 import ChatBubble, { AvatarAura } from "@/components/chat/ChatBubble";
 import { CitaCancelada, CitaConfirmada } from "@/components/chat/CitaConfirmada";
 import Escribiendo from "@/components/chat/Escribiendo";
+import LoteEnEspera from "@/components/chat/LoteEnEspera";
+import LoteOfertaCard from "@/components/chat/LoteOfertaCard";
 import OpcionCard from "@/components/chat/OpcionCard";
 import { ApiError, chatEnviar, chatHistorial, chatReiniciar } from "@/lib/api";
 import { fechaConDia } from "@/lib/format";
 import { nombreDistrito, PerfilEstudiante } from "@/lib/perfiles";
-import { ChatMessage, Opcion } from "@/lib/types";
+import { AvisoEstudiante, ChatMessage, Opcion } from "@/lib/types";
 
 const uid = () => Math.random().toString(36).slice(2);
 const claveSesion = (estudianteId: string) => `aura:chat:${estudianteId}`;
@@ -151,6 +154,8 @@ export default function ChatPage() {
             cita: res.cita ?? undefined,
             citaCancelada: res.cita_cancelada ?? undefined,
             desencuentro: res.desencuentro_registrado || undefined,
+            lote: res.lote ?? undefined,
+            loteOferta: res.lote_oferta ?? undefined,
             crisis: res.alerta_crisis || undefined,
           },
         ]);
@@ -163,6 +168,22 @@ export default function ChatPage() {
     },
     [enviando, perfil, sessionId, guardarSesion],
   );
+
+  // Avisos en vivo: cuando el lote en el que esperas se resuelve, llega tu cita (o el aviso de que no hubo cupo).
+  useAvisos(perfil.id, (aviso: AvisoEstudiante) => {
+    if (aviso.tipo === "lote_en_espera" || !aviso.mensaje) return;
+    setMensajes((m) => [
+      ...m,
+      {
+        id: uid(),
+        role: "agent",
+        text: aviso.mensaje as string,
+        cita: aviso.cita,
+        aviso: aviso.tipo,
+        error: aviso.tipo === "lote_error" || undefined,
+      },
+    ]);
+  });
 
   const elegir = (o: Opcion, numero: number) =>
     enviar(
@@ -187,6 +208,10 @@ export default function ChatPage() {
   const indiceUltima = mensajes.findIndex((m) => m.id === ultimaConOpciones);
   const reservadaDespues = mensajes.slice(indiceUltima + 1).some((m) => m.cita);
   const soloSaludo = mensajes.length === 1;
+  // La oferta de lote solo se puede aceptar mientras es la más reciente y nadie entró todavía.
+  const ultimaOferta = [...mensajes].reverse().find((m) => m.loteOferta)?.id;
+  const indiceOferta = mensajes.findIndex((m) => m.id === ultimaOferta);
+  const yaEntro = mensajes.slice(indiceOferta + 1).some((m) => m.lote);
 
   return (
     <PortalShell
@@ -256,7 +281,7 @@ export default function ChatPage() {
             {recuperando ? (
               <div className="flex justify-center py-10 text-sm font-semibold text-co-ink">Recuperando tu conversación…</div>
             ) : (
-              mensajes.map((m) => {
+              mensajes.map((m, indice) => {
                 const activas = m.id === ultimaConOpciones && !reservadaDespues;
                 return (
                   <div key={m.id} className="space-y-3">
@@ -283,9 +308,24 @@ export default function ChatPage() {
                       </div>
                     )}
 
+                    {m.loteOferta && (
+                      <div className="ml-0 max-w-xl sm:ml-11">
+                        <LoteOfertaCard
+                          oferta={m.loteOferta}
+                          activa={m.id === ultimaOferta && !yaEntro && !enviando}
+                          onEntrar={() => enviar("Sí, quiero entrar al lote")}
+                          onCambiar={() => campo.current?.focus()}
+                        />
+                      </div>
+                    )}
+                    {m.lote && (
+                      <div className="ml-0 max-w-xl sm:ml-11">
+                        <LoteEnEspera lote={m.lote} resuelto={mensajes.slice(indice + 1).some((x) => !!x.aviso)} />
+                      </div>
+                    )}
                     {m.cita && (
                       <div className="ml-0 max-w-xl sm:ml-11">
-                        <CitaConfirmada cita={m.cita} />
+                        <CitaConfirmada cita={m.cita} etiqueta={m.aviso === "lote_asignada" ? "Asignada por lote" : "Cita confirmada"} />
                       </div>
                     )}
                     {m.citaCancelada && (

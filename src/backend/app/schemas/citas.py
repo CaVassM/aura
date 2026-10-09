@@ -46,10 +46,23 @@ class OpcionOut(BaseModel):
     afinidad: float
 
 
+class LoteOfertaOut(BaseModel):
+    """Cuando solo hay servicios en modo lote: cómo funciona el lote y cuánto falta para que cierre."""
+
+    umbral_pct: float
+    ventana_s: int
+    tamano_maximo: int
+    abierto: bool
+    pendientes: int
+    cierra_en: str | None = None
+    servicios: list[str] = []
+
+
 class PropuestaOut(BaseModel):
     opciones: list[OpcionOut]
     servicio_ideal: str | None = None
     motivo_vacio: str | None = None
+    lote: LoteOfertaOut | None = None
 
 
 class ServicioOut(BaseModel):

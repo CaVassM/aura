@@ -111,7 +111,23 @@ La población es de **50** órdenes y se comparan **5** semillas (**42–46**). 
 
 ## 8. Modo directo y modo lote
 
-El **modo directo** atiende una conversación: propone opciones y reserva cuando la persona acepta. Es el único modo implementado. El **modo lote** es una etapa futura: tomaría solicitudes pendientes y optimizaría asignaciones en conjunto. El diseño deja como referencia un umbral de utilización por servicio del **70%** para estudiar cuándo activar ese proceso; no cambia el comportamiento actual. Fuente: `modo_lote_umbral_utilizacion` en [parametros.yaml](../config/parametros.yaml).
+El **modo directo** atiende una conversación: propone opciones y reserva cuando la persona acepta. El **modo lote** reparte los cupos de los servicios muy ocupados entre varias solicitudes a la vez, con el algoritmo genético de la sección 7. Los dos funcionan en la plataforma.
+
+**Cuándo se activa.** Cada servicio tiene una **utilización**: cupos reservados ÷ cupos liberados de la agenda abierta (la misma «ocupación» del panel). Cuando llega al **75 %** (`modo_lote_umbral_utilizacion`, acordado por el equipo; antes 70 % provisional), el servicio entra en **modo lote**: sus cupos dejan de ofrecerse uno a uno. Si baja del umbral (por una cancelación), vuelve al modo directo.
+
+**Qué le pasa a una solicitud.**
+
+1. `proponer_opciones` busca solo entre servicios en modo directo. Si hay opciones, todo sigue como siempre.
+2. Si lo único compatible está en modo lote, no hay opciones para elegir: se ofrece **entrar al lote** (el agente lo explica y la persona debe aceptar).
+3. La solicitud espera en el **lote abierto**. El primero que entra abre la cuenta regresiva.
+
+**Cuándo se cierra: solo.** A los `lote.ventana_segundos` (30 s) de entrar la primera solicitud, o apenas junta `lote.tamano_maximo` (5), lo que ocurra primero. Nadie lo cierra a mano.
+
+**Cómo se resuelve.** Al cerrarse, el genético decide un orden de prioridad para todo el grupo y el decodificador asigna a cada persona la opción libre de menor costo (mismas reglas R1–R6, mismo costo individual y mismo fitness Z1–Z5 que en la sección 7). Después la plataforma reserva las citas, registra como desencuentro a quien no encontró cupo y avisa a cada estudiante en vivo. Dos simplificaciones, por correr en vivo: la normalización de Z usa los límites fijos del «plan B» del experimento (no las cinco calibraciones por lote), y la utilización de Z3 usa como denominador los cupos que aún quedan libres. Si el genético no mejora el orden de llegada, se conserva el de llegada. Con 1 solicitud no hay nada que optimizar.
+
+**Qué esperar.** Como dice la sección 9, el genético no crea capacidad: cuando las solicitudes de un lote no compiten por los mismos cupos, el resultado es igual al de asignar por orden de llegada. Cambia el orden cuando eso reparte mejor (más asignadas, menos espera, más equidad entre diurnos y nocturnos).
+
+Todo vive en RAM y se vacía al reiniciar el backend o la demo. Código: [lote_service.py](../app/services/lote_service.py) (reglas, temporizador, aplicar reservas) y [lote.py](../aura/herramientas/lote.py) (planificación con el genético). Parámetros: `modo_lote_umbral_utilizacion` y el bloque `lote` de [parametros.yaml](../config/parametros.yaml).
 
 ## 9. Resultados del experimento y lectura honesta
 

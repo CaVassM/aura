@@ -56,16 +56,18 @@ function Fila({ e, reciente }: { e: EventoActividad; reciente: boolean }) {
               {e.servicio.nombre}
               <span className="text-xs font-semibold text-co-teal"> · {e.servicio.tipo_label}</span>
             </>
-          ) : (
+          ) : e.desencuentro ? (
             <>
-              Sin cupo de {e.desencuentro?.servicio_ideal_label}
-              <span className="text-xs font-semibold text-co-amber-ink"> · {distritoLabel(e.desencuentro?.distrito ?? "")}</span>
+              Sin cupo de {e.desencuentro.servicio_ideal_label}
+              <span className="text-xs font-semibold text-co-amber-ink"> · {distritoLabel(e.desencuentro.distrito)}</span>
             </>
+          ) : (
+            <>Lote {e.lote?.id}</>
           )}
         </p>
         <p className="truncate text-xs font-semibold text-co-ink">{detalleEvento(e)}</p>
         <p className="mt-0.5 text-[11px] font-semibold text-co-ink/80">
-          {e.estudiante_id}
+          {e.estudiante_id ?? "Sistema"}
           <span className="lg:hidden"> · {ORIGEN_LABEL[e.origen]}</span>
           {e.cita?.es_alternativa && <span className="text-co-amber-ink"> · servicio alternativo</span>}
           {e.cita && e.cita.dias_espera != null && <span> · espera {e.cita.dias_espera} d</span>}
@@ -75,8 +77,15 @@ function Fila({ e, reciente }: { e: EventoActividad; reciente: boolean }) {
       <div className="col-span-2 lg:col-span-1">
         {e.ocupacion ? (
           <>
-            <div className="flex items-baseline justify-between text-xs font-bold">
-              <span className="text-co-ink">Ocupación</span>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-xs font-bold">
+              <span className="flex items-center gap-1.5 text-co-ink">
+                Ocupación
+                {e.ocupacion.en_lote && (
+                  <span className="rounded bg-co-coral px-1.5 py-0.5 text-[10px] font-extrabold uppercase leading-none tracking-wider text-white">
+                    en lote
+                  </span>
+                )}
+              </span>
               <span className={`tabular ${NIVEL_INK[e.ocupacion.nivel]}`}>
                 {num(e.ocupacion.antes_pct)} % → {num(e.ocupacion.pct)} %
               </span>
@@ -88,11 +97,27 @@ function Fila({ e, reciente }: { e: EventoActividad; reciente: boolean }) {
               {e.ocupacion.reservados} de {e.ocupacion.liberados} cupos liberados
             </p>
           </>
-        ) : (
+        ) : e.lote ? (
+          <>
+            <div className="flex items-baseline justify-between text-xs font-bold">
+              <span className="text-co-ink">{e.lote.resultado ? "Resultado" : "Solicitudes"}</span>
+              <span className="tabular text-co-teal-dark">
+                {e.lote.resultado ? `${e.lote.resultado.asignados} de ${e.lote.solicitudes}` : `${e.lote.solicitudes} / ${e.lote.tamano_maximo}`}
+              </span>
+            </div>
+            <div className="mt-1.5">
+              <Barra
+                pct={e.lote.resultado ? (100 * e.lote.resultado.asignados) / Math.max(1, e.lote.solicitudes) : (100 * e.lote.solicitudes) / e.lote.tamano_maximo}
+                color="bg-co-teal"
+                alto="h-2"
+              />
+            </div>
+          </>
+        ) : e.desencuentro ? (
           <p className="text-xs font-semibold text-co-ink">
-            Aceptaba: {e.desencuentro?.canales.map((c) => canalUi(c).label).join(", ")} · {e.desencuentro?.grupo_label}
+            Aceptaba: {e.desencuentro.canales.map((c) => canalUi(c).label).join(", ")} · {e.desencuentro.grupo_label}
           </p>
-        )}
+        ) : null}
       </div>
 
       <div className="hidden justify-self-end lg:block">
@@ -114,6 +139,7 @@ export default function EnVivoPage() {
   const reservadas = eventos.filter((e) => e.tipo === "cita_reservada").length;
   const canceladas = eventos.filter((e) => e.tipo === "cita_cancelada").length;
   const desencuentros = eventos.filter((e) => e.tipo === "desencuentro").length;
+  const lotes = eventos.filter((e) => e.tipo === "lote_resuelto").length;
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
@@ -121,7 +147,8 @@ export default function EnVivoPage() {
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-co-navy">En vivo</h1>
           <p className="mt-1 max-w-2xl text-sm font-medium leading-relaxed text-co-ink">
-            Cada cita que un estudiante reserva o cancela, y cada solicitud sin cupo, aparece aquí al instante. Solo se
+            Cada cita que un estudiante reserva o cancela, cada solicitud sin cupo y cada novedad del modo lote aparecen
+            aquí al instante. Solo se
             registra lo nuevo: las citas que ya vienen cargadas en la demo no figuran en este registro.
           </p>
         </div>
@@ -135,10 +162,11 @@ export default function EnVivoPage() {
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Contador titulo="Citas nuevas" valor={reservadas} tinte="bg-co-sage-tint" tinta="text-co-sage-ink" />
         <Contador titulo="Canceladas" valor={canceladas} tinte="bg-co-coral-tint" tinta="text-co-coral-ink" />
         <Contador titulo="Desencuentros" valor={desencuentros} tinte="bg-co-amber-tint" tinta="text-co-amber-ink" />
+        <Contador titulo="Lotes resueltos" valor={lotes} tinte="bg-co-teal-tint" tinta="text-co-teal-dark" />
       </div>
 
       <Seccion titulo="Registro de citas nuevas" acento="bg-co-teal">

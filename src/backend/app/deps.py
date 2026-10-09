@@ -14,6 +14,7 @@ from .services.citas_service import CitasService
 from .services.demo_service import DemoService
 from .services.desencuentros_service import DesencuentrosService
 from .services.errors import AgenteNoDisponibleError
+from .services.lote_service import LoteService
 from .services.reglas_service import ReglasService
 from .services.resumen_service import ResumenService
 from .services.servicios_service import ServiciosService
@@ -87,3 +88,7 @@ def get_chat_sesiones(estado: AppState = Depends(get_estado)) -> ChatService:
 
 def get_actividad(estado: AppState = Depends(get_estado)) -> ActividadService:
     return ActividadService(estado)
+
+
+def get_lotes(estado: AppState = Depends(get_estado)) -> LoteService:
+    return LoteService(estado)

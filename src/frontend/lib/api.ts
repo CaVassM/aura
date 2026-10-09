@@ -8,13 +8,14 @@
  * Todo el estado vive en la RAM del backend: si se reinicia, se pierden citas y conversaciones.
  */
 
-import { ChatRespuesta, Cita, HistorialChat } from "./types";
+import { AvisoEstudiante, ChatRespuesta, Cita, HistorialChat } from "./types";
 import {
   ActividadRespuesta,
   DesencuentrosRespuesta,
   EstadoDemo,
   FiltrosDesencuentros,
   FiltrosServicios,
+  LotesRespuesta,
   Reglas,
   Resumen,
   ServicioDetalle,
@@ -129,6 +130,9 @@ export const getReglas = () => request<Reglas>("/api/coordinacion/reglas");
 export const getActividad = (desde = 0) =>
   request<ActividadRespuesta>("/api/coordinacion/actividad", { desde });
 
+/** Modo lote: servicios por utilización (con el umbral), lote abierto con cuenta regresiva e historial. */
+export const getLotes = () => request<LotesRespuesta>("/api/coordinacion/lotes");
+
 /** URL del flujo en tiempo real (SSE); `desde` es el último id que ya se tiene. */
 export const urlActividadStream = (desde = 0) =>
   `${API_BASE_URL}/api/coordinacion/actividad/stream?desde=${desde}`;
@@ -178,3 +182,14 @@ export const cancelarCita = (citaId: string, estudianteId: string) =>
     { estudiante_id: estudianteId },
     { method: "DELETE" },
   );
+
+/** Avisos de la persona con id mayor que `desde` (p. ej. «tu lote se resolvió»). */
+export const getAvisos = (estudianteId: string, desde = 0) =>
+  request<{ epoca: string; ultimo_id: number; avisos: AvisoEstudiante[] }>(
+    `/api/estudiantes/${encodeURIComponent(estudianteId)}/avisos`,
+    { desde },
+  );
+
+/** URL del flujo en tiempo real (SSE) de los avisos de la persona. */
+export const urlAvisosStream = (estudianteId: string, desde = 0) =>
+  `${API_BASE_URL}/api/estudiantes/${encodeURIComponent(estudianteId)}/avisos/stream?desde=${desde}`;

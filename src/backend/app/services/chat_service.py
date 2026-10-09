@@ -26,6 +26,7 @@ from .errors import (
     SlotTakenError,
 )
 from .etiquetas import Etiquetas
+from .lote_service import LoteService
 
 if TYPE_CHECKING:  # el agente importa LangChain: se carga solo al usar el chat (ver deps.get_agente)
     from agente.agente import AgenteAura
@@ -71,6 +72,12 @@ class PuertoPlataforma:
 
     def listar_citas(self, estudiante_id: str) -> list[dict]:
         return [self._cita(c) for c in self._citas.listar(estudiante_id)]
+
+    def entrar_a_lote(self, solicitud: dict, estudiante_id: str, sesion_id: str) -> dict:
+        try:
+            return LoteService(self._estado).entrar(estudiante_id, solicitud, sesion_id, origen="chat")
+        except PlatformError as error:
+            return self._error(error)
 
     def registrar_desencuentro(self, solicitud: dict) -> dict:
         return self._citas.registrar_desencuentro(solicitud, origen="chat")
@@ -126,15 +133,19 @@ class ChatService:
 
     def _respuesta(self, session_id: str, resultado) -> dict:
         opciones, cita, cancelada, desencuentro = [], None, None, False
+        lote, lote_oferta = None, None
         for evento in resultado.eventos:
             if not evento.ok:
                 continue
             if evento.nombre == "proponer_opciones":
                 opciones = evento.resultado["opciones"]
+                lote_oferta = evento.resultado.get("lote") if evento.resultado.get("motivo_vacio") == "servicios_en_lote" else None
             elif evento.nombre == "reservar_cita":
                 cita, opciones = self._cita_out(evento.resultado["cita"]), []
             elif evento.nombre == "cancelar_cita":
                 cancelada = self._cita_out(evento.resultado["cita"])
+            elif evento.nombre == "entrar_a_lote":
+                lote, lote_oferta = evento.resultado["lote"], None
             elif evento.nombre == "registrar_desencuentro":
                 desencuentro = True
         return {
@@ -144,6 +155,8 @@ class ChatService:
             "cita": cita,
             "cita_cancelada": cancelada,
             "desencuentro_registrado": desencuentro,
+            "lote": lote,
+            "lote_oferta": lote_oferta,
             "alerta_crisis": resultado.crisis,
             "herramientas_usadas": [{"nombre": e.nombre, "ok": e.ok} for e in resultado.eventos],
         }

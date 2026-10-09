@@ -4,6 +4,7 @@ from ..models import Cita
 from ..repositories.app_state import AppState
 from .actividad_service import ActividadService
 from .etiquetas import Etiquetas
+from .lote_service import LoteService
 from .errors import InvalidRequestError, NotFoundError, SlotTakenError
 
 
@@ -16,10 +17,25 @@ class CitasService:
         self._actividad = ActividadService(estado)
 
     def proponer(self, solicitud: dict, k: int = 3) -> dict:
-        """Opciones compatibles sin reservar; una solicitud inválida es un 422."""
-        resultado = self._estado.motor.proponer_opciones(solicitud, k)
+        """Opciones compatibles sin reservar; una solicitud inválida es un 422.
+
+        Los servicios en modo lote (utilización ≥ umbral) no se ofrecen uno a uno. Si lo único compatible está en
+        modo lote, no hay opciones y se devuelve `motivo_vacio: "servicios_en_lote"` con los datos del lote."""
+        lotes = LoteService(self._estado)
+        en_lote = lotes.servicios_en_lote()
+        resultado = self._estado.motor.proponer_opciones(solicitud, k, excluir_servicios=en_lote)
         if resultado.get("motivo_vacio") == "solicitud_invalida":
             raise InvalidRequestError(resultado.get("detalle", ""))
+        if not resultado["opciones"] and en_lote:
+            con_lote = self._estado.motor.proponer_opciones(solicitud, 10)
+            if con_lote["opciones"]:
+                nombres = list(dict.fromkeys(o["servicio_nombre"] for o in con_lote["opciones"]))
+                return {
+                    "opciones": [],
+                    "motivo_vacio": "servicios_en_lote",
+                    "servicio_ideal": con_lote["servicio_ideal"],
+                    "lote": {**lotes.info_oferta(), "servicios": nombres[:3]},
+                }
         for opcion in resultado["opciones"]:
             opcion["tipo_label"] = self._etiquetas.tipo(opcion["tipo"])
         return resultado

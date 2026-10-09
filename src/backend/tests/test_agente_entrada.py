@@ -64,3 +64,23 @@ def test_cancelar_exige_pedido_o_confirmacion(mensaje, ultima, esperado):
     from agente.entrada import confirma_cancelacion
 
     assert confirma_cancelacion(mensaje, ultima) is esperado
+
+
+@pytest.mark.parametrize(
+    "mensaje, ultima, esperado",
+    [
+        ("sí, quiero entrar al lote", "", True),
+        ("Anótame en el lote", "", True),
+        ("acepto entrar al lote", "", True),
+        ("sí", "Se reparte por lote. ¿Quieres entrar al lote?", True),
+        ("dale", "¿Quieres que te ponga en el lote?", True),
+        ("sí", "¿Cuál de estas opciones prefieres?", False),
+        ("no quiero entrar al lote", "", False),
+        ("no, gracias", "¿Quieres entrar al lote?", False),
+        ("mmm déjame pensarlo", "¿Quieres entrar al lote?", False),
+    ],
+)
+def test_entrar_al_lote_exige_aceptacion_clara(mensaje, ultima, esperado):
+    from agente.entrada import acepta_lote
+
+    assert acepta_lote(mensaje, ultima) is esperado

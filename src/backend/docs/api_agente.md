@@ -48,6 +48,8 @@ Respuesta `200`:
 | `cita` | objeto \| null | Cita reservada en este mensaje (mismo formato que `CitaOut` de `/appointments`: `id`, `servicio_nombre`, `tipo`, `tipo_label`, `distrito`, `hora_fin`, `slot.fecha_iso`, `canal`, `estado`) |
 | `cita_cancelada` | objeto \| null | Cita cancelada en este mensaje |
 | `desencuentro_registrado` | bool | El agente avisó al equipo que no había opción compatible |
+| `lote_oferta` | objeto \| null | Todo lo compatible está en servicios en **modo lote** (≥ 75 % de utilización): no hay `opciones`; se ofrece entrar al lote. `{umbral_pct, ventana_s, tamano_maximo, abierto, pendientes, cierra_en, servicios[]}`. El portal puede mostrar un botón «Entrar al lote» que envía «sí, quiero entrar al lote» |
+| `lote` | objeto \| null | La persona quedó esperando en un lote: `{id, estado: "en_espera", posicion, solicitudes, tamano_maximo, cierra_en}`. `cierra_en` (ISO UTC) sirve para la cuenta regresiva; el lote se cierra solo |
 | `alerta_crisis` | bool | El mensaje activó el protocolo de ayuda inmediata (la respuesta es un texto fijo que remite a emergencias y a la línea de ayuda de la institución; no se llamó al modelo) |
 | `herramientas_usadas` | lista | `[{"nombre": "proponer_opciones", "ok": true}, …]`, en orden. Útil para depurar |
 
@@ -98,6 +100,7 @@ El modelo las llama solo; no son endpoints. Están en `agente/herramientas.py` y
 | `reservar_cita` | `numero` (1, 2, 3… de la última lista) | Reserva esa opción. El modelo nunca ve ni copia identificadores internos |
 | `cancelar_cita` | `cita_id` | Cancela una cita **de esa persona** |
 | `listar_mis_citas` | — | Lista las citas de la persona |
+| `entrar_a_lote` | — | Pone a la persona en el lote abierto (lo abre si no hay). Solo después de `proponer_opciones` → `servicios_en_lote` **y** si la persona aceptó (mismo tipo de bloqueo que cancelar) |
 | `registrar_desencuentro` | — | Avisa que no hubo opción: guarda la última búsqueda (solo después de `proponer_opciones`) |
 
 `proponer_opciones` se **niega a buscar** (`faltan_datos`) si en la conversación la persona no ha mencionado días ni canal (`agente/entrada.py`; basta una mención, incluso «cualquier día» o «da igual»). Es una red de seguridad contra modelos pequeños que inventan esos datos; el agente debe preguntárselos (tolera letras repetidas por error de tipeo). Del mismo modo, `cancelar_cita` se niega (`falta_confirmacion`) si el mensaje no pide cancelar ni responde «sí» a una pregunta de cancelar. Cada opción llega al modelo con un `texto` ya redactado (servicio, día, fecha, hora y canal) para que lo copie.
@@ -154,3 +157,16 @@ POST /api/chat → app/api/chat.py → ChatService (sesión, resultado) → agen
 - `agente/` no importa `app/` ni `aura/`: usa el puerto `agente/puerto.py`, que implementa `app/services/chat_service.py`.
 - Seguridad: crisis (`agente/crisis.py`) responde con texto fijo sin llamar al modelo; el prompt prohíbe diagnosticar; las herramientas no dejan reservar ids inventados ni cancelar citas ajenas.
 - Pruebas (no necesitan Ollama): `python -m pytest tests/test_agente_chat.py tests/test_agente_ollama_http.py tests/test_validacion_herramientas.py`. Usan un modelo guionado y un servidor que imita la API HTTP de Ollama; **no validan la calidad de las respuestas de gemma4**, eso se prueba conversando (`python -m app.cli_chat`).
+
+
+## Modo lote y avisos en vivo
+
+Con la utilización ≥ 75 %, un servicio entra en modo lote y `proponer_opciones` ya no ofrece sus cupos (ver [como_funciona.md §8](como_funciona.md)). Si lo único compatible está ahí, la respuesta trae `lote_oferta`; al aceptar, el agente llama a `entrar_a_lote` y la respuesta trae `lote`. Cuando el lote se cierra solo, la persona recibe su cita **sin enviar ningún mensaje**:
+
+| Método | Ruta | Para qué |
+|---|---|---|
+| GET | `/api/estudiantes/{estudiante_id}/avisos?desde=` | Avisos de la persona con id mayor que `desde` → `{epoca, ultimo_id, avisos[]}` |
+| GET | `/api/estudiantes/{estudiante_id}/avisos/stream?desde=` | Lo mismo en tiempo real (SSE, `event: aviso`; mismo formato que el flujo de actividad: `inicio`, `reinicio`, `: ping`) |
+| POST | `/api/appointments/lote` | Entrar al lote por API (cuerpo como `proposals`); solo vale si `proposals` devolvió `motivo_vacio: "servicios_en_lote"`. `409 ya_en_lote` si ya espera |
+
+Cada aviso: `{id, estudiante_id, tipo, registrado_en, ...}` con `tipo` = `lote_en_espera`, `lote_asignada` (trae `mensaje` y `cita`, como `CitaOut`), `lote_sin_cupo` (`mensaje`) o `lote_error`. Además, el texto del resultado se agrega a la conversación (`GET /api/chat/{session_id}` lo devuelve) para que el agente sepa qué pasó.

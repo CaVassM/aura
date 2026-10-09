@@ -20,7 +20,7 @@ import ReiniciarDemo from "./ReiniciarDemo";
 export default function CoordinacionShell({ children }: { children: ReactNode }) {
   const ruta = usePathname();
   const { estado, error, cargando, reintentar } = useDemo();
-  const { sinVer, conectado } = useActividad();
+  const { sinVer, conectado, loteAbierto } = useActividad();
 
   return (
     <div className="flex min-h-screen bg-co-bg text-co-navy">
@@ -55,6 +55,13 @@ export default function CoordinacionShell({ children }: { children: ReactNode })
                 )}
                 <span className="shrink-0 [&>svg]:h-[18px] [&>svg]:w-[18px]">{item.icon}</span>
                 {item.label}
+                {item.href === "/coordinacion/lotes" && loteAbierto && (
+                  <span
+                    className="ml-auto h-2 w-2 animate-breathe rounded-full bg-co-amber"
+                    title="Hay un lote abierto"
+                    aria-label="Hay un lote abierto"
+                  />
+                )}
                 {item.href === RUTA_EN_VIVO && (
                   <span className="ml-auto flex items-center gap-1.5">
                     {sinVer > 0 && (

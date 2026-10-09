@@ -6,6 +6,7 @@ import { CalendarClock, Clock, MapPin, MessageCircle, Sparkles } from "lucide-re
 import PortalShell from "@/components/PortalShell";
 import { usePerfil } from "@/components/campus/PerfilProvider";
 import TopbarControls from "@/components/campus/TopbarControls";
+import { useAvisos } from "@/components/campus/useAvisos";
 import { campusBrand, campusNav } from "@/components/campus/nav";
 import { EstadoError } from "@/components/ui/Estados";
 import { cancelarCita, getMisCitas } from "@/lib/api";
@@ -157,6 +158,11 @@ export default function MisCitasPage() {
   }, [perfil.id]);
 
   useEffect(cargar, [cargar]);
+
+  // Si un lote se resuelve mientras miras esta pantalla, la cita nueva aparece sola.
+  useAvisos(perfil.id, (aviso) => {
+    if (aviso.tipo === "lote_asignada") getMisCitas(perfil.id).then(setCitas).catch(() => undefined);
+  });
 
   const alCancelar = (cancelada: Cita) =>
     setCitas((lista) => lista?.map((c) => (c.id === cancelada.id ? cancelada : c)) ?? null);

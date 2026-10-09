@@ -2,7 +2,8 @@
 
 from pydantic import BaseModel, Field
 
-from .citas import CitaOut, OpcionOut
+from .citas import CitaOut, LoteOfertaOut, OpcionOut
+from .lotes import LoteEstadoOut
 
 
 class ChatIn(BaseModel):
@@ -31,6 +32,12 @@ class ChatOut(BaseModel):
     cita: CitaOut | None = Field(default=None, description="Cita reservada en este mensaje")
     cita_cancelada: CitaOut | None = Field(default=None, description="Cita cancelada en este mensaje")
     desencuentro_registrado: bool = False
+    lote: LoteEstadoOut | None = Field(
+        default=None, description="La persona quedó esperando en un lote: cuenta regresiva hasta que se cierre solo"
+    )
+    lote_oferta: LoteOfertaOut | None = Field(
+        default=None, description="Todo lo compatible está en servicios en modo lote: el agente ofrece entrar al lote"
+    )
     alerta_crisis: bool = Field(default=False, description="El mensaje activó el protocolo de ayuda inmediata")
     herramientas_usadas: list[HerramientaUsadaOut] = []
 

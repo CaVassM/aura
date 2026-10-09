@@ -8,7 +8,16 @@ fraccion_liberada: 0.50 # PROVISIONAL: política de liberación para el prototip
 ocupacion_inicial: 0.10
 beta: 5.0
 umbral_afinidad: 0.50 # PROVISIONAL: mínimo para aceptar un servicio alternativo
-modo_lote_umbral_utilizacion: 0.70 # PROVISIONAL: diseño futuro; no se usa en el modo directo
+# Modo lote (docs/como_funciona.md §8). Un servicio entra en modo lote cuando su utilización (cupos reservados /
+# cupos liberados de la agenda abierta) llega a este valor: sus cupos ya no se ofrecen uno a uno, solo se reparten
+# por lote. Valor acordado con el equipo (antes 0.70, provisional).
+modo_lote_umbral_utilizacion: 0.75
+lote:
+  ventana_segundos: 30 # el lote se cierra solo a los N segundos de entrar la primera solicitud…
+  tamano_maximo: 5 # …o apenas junta N solicitudes, lo que ocurra primero
+  poblacion: 40 # genético del lote en vivo (el de los experimentos usa 50 y 200–500 generaciones)
+  generaciones: 100
+  semilla: 42
 experimento:
   poblacion: 50
   workers: 5

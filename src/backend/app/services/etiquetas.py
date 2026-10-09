@@ -1,6 +1,12 @@
 """Etiquetas en español y utilidades de presentación, leídas de `etiquetas` en tablas.yaml."""
 
+from datetime import date
 from itertools import groupby
+
+MESES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+]
 
 
 class Etiquetas:
@@ -35,6 +41,11 @@ class Etiquetas:
 
     def dia_largo(self, indice: int) -> str:
         return self._e["dias_semana_largo"][indice]
+
+    def fecha_texto(self, iso: str) -> str:
+        """`2026-11-25` → `miércoles 25 de noviembre`."""
+        f = date.fromisoformat(iso)
+        return f"{self.dia_largo(f.weekday())} {f.day} de {MESES[f.month - 1]}"
 
     def dias_texto(self, indices: list[int]) -> str:
         """`Lun–Vie` si los días son consecutivos (3 o más); si no, `Lun, Mié`."""

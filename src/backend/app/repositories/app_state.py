@@ -13,9 +13,11 @@ from aura.servicio import ServicioAsignacion
 
 from ..settings import Settings
 from .actividad_repository import ActividadRepository
+from .avisos_repository import AvisosRepository
 from .chat_repository import ChatRepository
 from .cita_repository import CitaRepository
 from .geo_d6 import cargar_geo_d6
+from .lote_repository import LoteRepository
 
 
 @dataclass
@@ -30,6 +32,8 @@ class AppState:
     citas: CitaRepository = field(default_factory=CitaRepository)
     chats: ChatRepository = field(default_factory=ChatRepository)
     actividad: ActividadRepository = field(default_factory=ActividadRepository)
+    avisos: AvisosRepository = field(default_factory=AvisosRepository)
+    lotes: LoteRepository = field(default_factory=LoteRepository)
     siembra: dict = field(default_factory=dict)
     lock: RLock = field(default_factory=RLock)
 

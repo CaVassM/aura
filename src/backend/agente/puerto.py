@@ -20,5 +20,8 @@ class PuertoAgenda(Protocol):
     def listar_citas(self, estudiante_id: str) -> list[dict]:
         """Citas de la persona (confirmadas y canceladas), la más reciente primero."""
 
+    def entrar_a_lote(self, solicitud: dict, estudiante_id: str, sesion_id: str) -> dict:
+        """`{"ok": True, "lote": {id, estado, posicion, solicitudes, tamano_maximo, cierra_en}}` o `{"ok": False, ...}`."""
+
     def registrar_desencuentro(self, solicitud: dict) -> dict:
         """`{"ok": True, "registro_id": ...}` o `{"ok": False, "error": ...}`."""

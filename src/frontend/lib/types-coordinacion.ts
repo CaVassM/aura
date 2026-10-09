@@ -262,7 +262,33 @@ export interface Reglas {
 
 // --- Actividad en vivo (GET /api/coordinacion/actividad y su flujo /stream) ---
 
-export type TipoEvento = "cita_reservada" | "cita_cancelada" | "desencuentro";
+export type TipoEvento =
+  | "cita_reservada"
+  | "cita_cancelada"
+  | "desencuentro"
+  | "servicio_en_lote"
+  | "servicio_sale_de_lote"
+  | "lote_abierto"
+  | "lote_solicitud"
+  | "lote_resuelto";
+
+export interface LoteEvento {
+  id: number;
+  estado: "abierto" | "resuelto";
+  solicitudes: number;
+  tamano_maximo: number;
+  ventana_s: number;
+  cierra_en: string | null;
+  resultado: {
+    asignados: number;
+    sin_cupo: number;
+    tiempo_s: number | null;
+    espera_media: number | null;
+    espera_media_llegada: number | null;
+    mejora_sobre_llegada: boolean | null;
+    error: string | null;
+  } | null;
+}
 
 export interface EventoActividad {
   id: number;
@@ -271,8 +297,8 @@ export interface EventoActividad {
   registrado_en: string;
   /** Fecha simulada de la demo en que ocurrió (`hoy`). */
   fecha_solicitud: string;
-  origen: "chat" | "api";
-  estudiante_id: string;
+  origen: "chat" | "api" | "lote";
+  estudiante_id: string | null;
   servicio: {
     service_id: string;
     nombre: string;
@@ -287,7 +313,11 @@ export interface EventoActividad {
     reservados: number;
     liberados: number;
     nivel: Nivel;
+    en_lote: boolean;
   } | null;
+  lote: LoteEvento | null;
+  /** Umbral de modo lote (solo en eventos de servicio_en_lote / servicio_sale_de_lote). */
+  umbral_pct: number | null;
   cita: {
     cita_id: string;
     fecha: string;
@@ -316,4 +346,93 @@ export interface ActividadRespuesta {
   epoca: string;
   ultimo_id: number;
   eventos: EventoActividad[];
+}
+
+
+// --- Modo lote (GET /api/coordinacion/lotes) ---
+
+export interface ServicioLote {
+  service_id: string;
+  nombre: string;
+  tipo: string;
+  tipo_label: string;
+  distrito: string;
+  pct: number;
+  reservados: number;
+  liberados: number;
+  en_lote: boolean;
+}
+
+export interface SolicitudLote {
+  posicion: number;
+  estudiante_id: string;
+  entrada_en: string;
+  origen: string;
+  motivo: string;
+  motivo_label: string;
+  distrito: string;
+  grupo: string;
+  grupo_label: string;
+}
+
+export interface MetricasLote {
+  objetivo: number;
+  asignados: number;
+  desencuentros: number;
+  espera_media: number;
+  espera_diurnos: number;
+  espera_nocturnos: number;
+  z: Record<string, number>;
+}
+
+export interface AsignacionLote {
+  estudiante_id: string;
+  posicion_llegada: number;
+  orden_asignacion: number;
+  servicio_nombre: string;
+  tipo_label: string;
+  distrito: string;
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  canal: string;
+  canal_label: string;
+  espera_dias: number;
+  es_alternativa: boolean;
+  cita_id: string;
+}
+
+export interface ResultadoLote {
+  asignados: number;
+  sin_cupo: number;
+  tiempo_s: number | null;
+  poblacion: number | null;
+  generaciones: number | null;
+  genetico: MetricasLote | null;
+  llegada: MetricasLote | null;
+  mejora_sobre_llegada: boolean | null;
+  asignaciones: AsignacionLote[];
+  sin_cupo_estudiantes: string[];
+  error: string | null;
+}
+
+export interface LoteDetalle {
+  id: number;
+  estado: "abierto" | "resolviendo" | "resuelto";
+  abierto_en: string;
+  cierra_en: string;
+  cerrado_en: string | null;
+  solicitudes: SolicitudLote[];
+  resultado: ResultadoLote | null;
+}
+
+export interface LotesRespuesta {
+  umbral_pct: number;
+  ventana_s: number;
+  tamano_maximo: number;
+  /** Hora del servidor: la cuenta regresiva se calcula con la diferencia con el reloj del navegador. */
+  servidor_ahora: string;
+  servicios: ServicioLote[];
+  abierto: LoteDetalle | null;
+  historial: LoteDetalle[];
 }

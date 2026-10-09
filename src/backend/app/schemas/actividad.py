@@ -22,6 +22,7 @@ class OcupacionEvento(BaseModel):
     reservados: int
     liberados: int
     nivel: Literal["baja", "media", "alta"]
+    en_lote: bool = Field(default=False, description="¿Está en modo lote (utilización ≥ umbral)?")
 
 
 class CitaEvento(BaseModel):
@@ -48,17 +49,38 @@ class DesencuentroEvento(BaseModel):
     canales: list[str]
 
 
+class LoteEvento(BaseModel):
+    id: int
+    estado: Literal["abierto", "resuelto"]
+    solicitudes: int
+    tamano_maximo: int
+    ventana_s: int
+    cierra_en: str | None = None
+    resultado: dict | None = Field(default=None, description="Solo al resolverse: resumen del lote")
+
+
 class EventoActividad(BaseModel):
     id: int
-    tipo: Literal["cita_reservada", "cita_cancelada", "desencuentro"]
+    tipo: Literal[
+        "cita_reservada",
+        "cita_cancelada",
+        "desencuentro",
+        "servicio_en_lote",
+        "servicio_sale_de_lote",
+        "lote_abierto",
+        "lote_solicitud",
+        "lote_resuelto",
+    ]
     registrado_en: str = Field(description="Instante real del registro (ISO, UTC)")
     fecha_solicitud: str = Field(description="Fecha simulada de la demo en que ocurrió (`hoy`)")
-    origen: Literal["chat", "api"]
-    estudiante_id: str
+    origen: Literal["chat", "api", "lote"]
+    estudiante_id: str | None = None
     servicio: ServicioEvento | None = None
     ocupacion: OcupacionEvento | None = None
     cita: CitaEvento | None = None
     desencuentro: DesencuentroEvento | None = None
+    lote: LoteEvento | None = None
+    umbral_pct: float | None = Field(default=None, description="Umbral de modo lote (solo en eventos de servicio_en_lote)")
 
 
 class ActividadOut(BaseModel):

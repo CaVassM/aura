@@ -6,7 +6,7 @@ Diferencias deliberadas con las herramientas del motor (`aura.herramientas`):
   identificadores internos, así que no puede inventarlos ni mostrárselos a la persona.
 - `proponer_opciones` se niega a buscar si la persona no ha dicho días ni canal, y `cancelar_cita` se niega si la
   persona no pidió cancelar ni confirmó una pregunta de cancelar (ver `entrada.py`).
-- `registrar_desencuentro` no recibe argumentos: usa la última solicitud buscada.
+- `registrar_desencuentro` y `entrar_a_lote` no reciben argumentos: usan la última solicitud buscada.
 - Las respuestas son JSON compacto y en español, listo para que el modelo lo redacte.
 """
 
@@ -179,6 +179,33 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             "canales_aceptables": canales_aceptables,
         }
         resultado = puerto.proponer(solicitud, k)
+        sesion.lote_disponible = False
+        if resultado.get("motivo_vacio") == "servicios_en_lote":
+            # Los servicios compatibles están en modo lote: no hay opciones para elegir; se ofrece el lote.
+            sesion.ultima_solicitud = solicitud
+            sesion.propuestas = {}
+            sesion.desencuentro_registrado = False
+            sesion.lote_disponible = True
+            registrar("proponer_opciones", True, resultado)
+            lote = resultado["lote"]
+            return _json(
+                {
+                    "opciones": [],
+                    "motivo_vacio": "servicios_en_lote",
+                    "lote": {
+                        "servicios": lote["servicios"],
+                        "umbral_pct": lote["umbral_pct"],
+                        "cierra_solo_en_segundos": lote["ventana_s"],
+                        "solicitudes_esperando": lote["pendientes"],
+                    },
+                    "indicacion": (
+                        "Todo lo compatible está en servicios con ocupación alta, que se reparten por lote: un grupo "
+                        "de solicitudes se asigna en conjunto y el lote se cierra solo en unos segundos. Explícaselo en "
+                        "simple, aclara que el horario lo decide el lote y pregúntale si quiere entrar. Si acepta, usa "
+                        "`entrar_a_lote`."
+                    ),
+                }
+            )
         if resultado.get("motivo_vacio") == "solicitud_invalida":
             registrar("proponer_opciones", False, resultado)
             return _json({"ok": False, "error": "solicitud_invalida", "detalle": resultado.get("detalle", "")})
@@ -258,6 +285,46 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
         registrar("listar_mis_citas", True, {"citas": citas})
         return _json({"citas": [_cita_para_modelo(c) for c in citas]})
 
+    def entrar_a_lote() -> str:
+        if not sesion.lote_disponible or sesion.ultima_solicitud is None:
+            resultado = {
+                "ok": False,
+                "error": "sin_oferta_de_lote",
+                "detalle": "Solo se entra al lote cuando proponer_opciones dijo que todo está en servicios_en_lote.",
+            }
+            registrar("entrar_a_lote", False, resultado)
+            return _json(resultado)
+        ultima = next(
+            (m.content for m in reversed(sesion.mensajes)
+             if m.type == "ai" and isinstance(m.content, str) and m.content and not getattr(m, "tool_calls", None)),
+            "",
+        )
+        if not entrada.acepta_lote(ctx.mensaje, ultima):
+            resultado = {
+                "ok": False,
+                "error": "falta_confirmacion",
+                "detalle": "La persona no aceptó entrar al lote. Pregúntale si quiere entrar y espera su respuesta.",
+            }
+            registrar("entrar_a_lote", False, resultado)
+            return _json(resultado)
+        resultado = puerto.entrar_a_lote(sesion.ultima_solicitud, sesion.estudiante_id, sesion.id)
+        registrar("entrar_a_lote", bool(resultado.get("ok")), resultado)
+        if not resultado.get("ok"):
+            return _json({"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")})
+        sesion.lote_disponible = False
+        sesion.lote_id = resultado["lote"]["id"]
+        lote = resultado["lote"]
+        return _json(
+            {
+                "ok": True,
+                "lote": {"numero": lote["id"], "tu_posicion": lote["posicion"], "se_cierra_en": lote["cierra_en"]},
+                "indicacion": (
+                    "Quedó en el lote. Dile que el lote se cierra solo en unos segundos (o antes si se llena), que se "
+                    "asigna en conjunto y que le avisarás aquí con su cita; no prometas día ni hora."
+                ),
+            }
+        )
+
     def registrar_desencuentro() -> str:
         if sesion.ultima_solicitud is None:
             return _json(
@@ -300,6 +367,15 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             func=listar_mis_citas,
             name="listar_mis_citas",
             description="Lista las citas de la persona (número, fecha, hora, estado). Úsala para ver o cancelar citas.",
+            args_schema=SinArgs,
+        ),
+        StructuredTool.from_function(
+            func=entrar_a_lote,
+            name="entrar_a_lote",
+            description=(
+                "Pone a la persona en el lote de asignación conjunta. Úsala SOLO después de que proponer_opciones "
+                "devolvió servicios_en_lote y la persona aceptó entrar."
+            ),
             args_schema=SinArgs,
         ),
         StructuredTool.from_function(

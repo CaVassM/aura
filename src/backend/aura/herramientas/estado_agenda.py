@@ -79,6 +79,15 @@ class AgendaViva:
         ocupados.update(cita["cupo_id"] for cita in self.reservas.values())
         return ocupados
 
+    def libres_ahora(self) -> set[str]:
+        """Cupos liberados para AURA y sin reserva viva."""
+        return self.libres_base - {cita["cupo_id"] for cita in self.reservas.values()}
+
+    def cupos_de_servicios(self, service_ids) -> set[str]:
+        """Ids de todos los cupos de esos servicios (p. ej. para apartarlos de las propuestas directas)."""
+        ids = set(service_ids)
+        return {c.id for c in self.cupos if c.service_id in ids} if ids else set()
+
     def opciones_validas(
         self, solicitud, referencia: date | None = None
     ) -> tuple[Opcion, ...]:

@@ -30,3 +30,8 @@ class InvalidRequestError(PlatformError):
 class AgenteNoDisponibleError(PlatformError):
     status_code = 503
     code = "agente_no_disponible"
+
+
+class YaEnLoteError(PlatformError):
+    status_code = 409
+    code = "ya_en_lote"

@@ -39,8 +39,10 @@ class HerramientasAgente:
             entrada, self.agenda.hoy, self.agenda.tablas, distritos
         )
 
-    def proponer_opciones(self, solicitud: dict, k: int = 3) -> dict:
-        """Devuelve hasta k propuestas válidas y disponibles, sin reservarlas."""
+    def proponer_opciones(self, solicitud: dict, k: int = 3, excluir_servicios=None) -> dict:
+        """Devuelve hasta k propuestas válidas y disponibles, sin reservarlas.
+
+        `excluir_servicios` aparta los cupos de esos servicios (los que están en modo lote)."""
         try:
             modelo, tipo_ideal = self.convertir_solicitud(solicitud)
             k = min(max(1, int(k)), K_MAXIMO)
@@ -50,7 +52,7 @@ class HerramientasAgente:
                 "motivo_vacio": "solicitud_invalida",
                 "detalle": str(error),
             }
-        mejores = self._mejores(modelo, k)
+        mejores = self._mejores(modelo, k, excluir=frozenset(excluir_servicios or ()))
         if not mejores:
             return {
                 "opciones": [],
@@ -64,7 +66,9 @@ class HerramientasAgente:
         opciones = [self._formatear_opcion(op, tipo_ideal) for op in mejores]
         return {"opciones": opciones, "servicio_ideal": tipo_ideal}
 
-    def _mejores(self, modelo: Solicitud, k: int, referencia: date | None = None) -> list:
+    def _mejores(
+        self, modelo: Solicitud, k: int, referencia: date | None = None, excluir: frozenset = frozenset()
+    ) -> list:
         """Hasta k opciones válidas y libres de menor costo para la solicitud.
 
         `referencia` es la fecha desde la cual se cuentan cupos y espera (por defecto, hoy).
@@ -74,7 +78,7 @@ class HerramientasAgente:
         return mejores_opciones(
             modelo,
             agenda.opciones_validas(modelo, referencia),
-            agenda.cupos_ocupados(),
+            agenda.cupos_ocupados() | agenda.cupos_de_servicios(excluir),
             max(0, int(k)),
             cupos_por_id=agenda.cupo_por_id,
             hoy=referencia,

@@ -81,6 +81,10 @@ El Data Pack no se copia al repo salvo D1, D2, D6 y D7 en `data_pack/`; las resp
 | GET | `/services`, `/services/{id}/slots` | Catálogo y cupos libres (estudiante) |
 | POST | `/appointments/proposals?k=` | Opciones compatibles, sin reservar (estudiante) |
 | POST / GET / DELETE | `/appointments`, `/appointments?estudiante_id=`, `/appointments/{id}` | Reservar, listar y cancelar (estudiante) |
+| GET | `/coordinacion/lotes` | Modo lote: servicios por utilización (umbral 75 %), lote abierto e historial |
+| GET | `/coordinacion/actividad`, `/coordinacion/actividad/stream` | Registro de lo nuevo y flujo en tiempo real (SSE) |
+| GET | `/estudiantes/{id}/avisos`, `/avisos/stream` | Avisos en vivo al estudiante (p. ej. «tu lote se resolvió») |
+| POST | `/appointments/lote` | Entrar al lote cuando todo lo compatible está en modo lote |
 | POST | `/chat` | Mensaje al agente conversacional (requiere Ollama) |
 | GET / DELETE | `/chat/{session_id}?estudiante_id=` | Releer o borrar una conversación |
 | GET | `/chat/estado` | Diagnóstico de Ollama y del modelo |

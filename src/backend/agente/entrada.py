@@ -60,6 +60,23 @@ def faltantes(textos: list[str]) -> list[str]:
     return falta
 
 
+_ACEPTA_LOTE = re.compile(
+    _colapsar(r"\b(entr\w*|acept\w*|quiero|anot\w*|apunt\w*|pon\w*|inscrib\w*|meta\w*)\b.*\blote\b")
+)
+_NEGATIVA = re.compile(r"^\W*(no|nunca|mejor no)\b")
+
+
+def acepta_lote(mensaje: str, ultima_respuesta: str) -> bool:
+    """¿La persona aceptó entrar al lote? Nombrándolo («quiero entrar al lote») o con un «sí» a una pregunta del
+    agente que hablaba del lote. Un «no» al comienzo lo niega."""
+    plano = _plano(mensaje)
+    if _NEGATIVA.search(plano):
+        return False
+    if _ACEPTA_LOTE.search(plano):
+        return True
+    return "lote" in _plano(ultima_respuesta) and bool(_AFIRMA.search(plano))
+
+
 def confirma_cancelacion(mensaje: str, ultima_respuesta: str) -> bool:
     """¿La persona pidió cancelar en este mensaje, o respondió que sí a una pregunta de cancelar?
 

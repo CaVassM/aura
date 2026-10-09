@@ -26,6 +26,8 @@ interface ActividadContexto {
   version: number;
   /** Eventos llegados mientras no se miraba la pantalla En vivo. */
   sinVer: number;
+  /** Hay un lote abierto (su última novedad no es una resolución). */
+  loteAbierto: boolean;
   avisos: EventoActividad[];
   cerrarAviso: (id: number) => void;
 }
@@ -109,9 +111,14 @@ export function ActividadProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const loteAbierto = useMemo(() => {
+    const ultimo = eventos.find((e) => e.tipo.startsWith("lote_"));
+    return !!ultimo && ultimo.tipo !== "lote_resuelto";
+  }, [eventos]);
+
   const valor = useMemo(
-    () => ({ eventos, conectado, version, sinVer, avisos, cerrarAviso }),
-    [eventos, conectado, version, sinVer, avisos, cerrarAviso],
+    () => ({ eventos, conectado, version, sinVer, loteAbierto, avisos, cerrarAviso }),
+    [eventos, conectado, version, sinVer, loteAbierto, avisos, cerrarAviso],
   );
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
 }
