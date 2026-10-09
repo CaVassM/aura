@@ -23,6 +23,8 @@ param(
 # Los errores importantes se revisan a mano con $LASTEXITCODE y -ErrorAction Stop.
 $ErrorActionPreference = "Continue"
 $Raiz = $PSScriptRoot
+# Las llamadas a localhost no deben pasar por el proxy del sistema (en Windows PowerShell 5.1 lo hacen y se demoran).
+try { [System.Net.WebRequest]::DefaultWebProxy = $null } catch { }
 $Back = Join-Path $Raiz "src\backend"
 $Front = Join-Path $Raiz "src\frontend"
 $Logs = Join-Path $Raiz "logs"
@@ -157,8 +159,35 @@ function Leer-Config($nombre, $defecto) {
     return $defecto
 }
 
-function Ollama-Responde($url) {
-    try { Invoke-RestMethod "$url/api/tags" -TimeoutSec 2 | Out-Null; return $true } catch { return $false }
+# "Esta abierto" = el puerto acepta conexiones (TCP). No se usa una peticion HTTP con tiempo limite corto: en Windows
+# PowerShell la primera peticion puede tardar varios segundos (deteccion de proxy) y daba falsos "no esta abierto".
+function Ollama-Abierto($url) {
+    try {
+        $uri = [Uri]$url
+        $hosts = @($uri.Host)
+        if ($uri.Host -eq "localhost") { $hosts = @("127.0.0.1", "::1") }
+        foreach ($h in $hosts) {
+            $cliente = New-Object System.Net.Sockets.TcpClient
+            try {
+                $intento = $cliente.BeginConnect($h, $uri.Port, $null, $null)
+                if ($intento.AsyncWaitHandle.WaitOne(3000, $false) -and $cliente.Connected) { return $true }
+            } catch { } finally { $cliente.Close() }
+        }
+    } catch { }
+    return $false
+}
+
+# Lista de modelos instalados. Puede fallar o tardar sin que Ollama este caido, asi que se reintenta y no es fatal.
+function Ollama-Modelos($url) {
+    $sonda = $url -replace "//localhost", "//127.0.0.1"
+    $motivo = ""
+    for ($i = 0; $i -lt 3; $i++) {
+        try {
+            $r = Invoke-RestMethod "$sonda/api/tags" -TimeoutSec 15 -ErrorAction Stop
+            return @{ ok = $true; nombres = @($r.models | ForEach-Object { $_.name }) }
+        } catch { $motivo = $_.Exception.Message; Start-Sleep -Seconds 1 }
+    }
+    return @{ ok = $false; motivo = $motivo }
 }
 
 $UrlOllama = (Leer-Config "AURA_OLLAMA_URL" "http://localhost:11434").TrimEnd("/")
@@ -166,28 +195,32 @@ $ModeloAgente = Leer-Config "AURA_OLLAMA_MODEL" "gemma4"
 $ollama = $null   # solo si lo inicia este script
 
 Paso "Agente: Ollama ($ModeloAgente)"
-if (-not (Ollama-Responde $UrlOllama)) {
+if (-not (Ollama-Abierto $UrlOllama)) {
     if (Get-Command ollama -ErrorAction SilentlyContinue) {
-        Write-Host "Ollama no estaba abierto: lo inicio (ollama serve)."
+        Write-Host "Ollama no esta abierto (nada escucha en $UrlOllama): lo inicio (ollama serve)."
         $ollama = Start-Process -FilePath "ollama" -ArgumentList @("serve") -PassThru -WindowStyle Hidden
         for ($i = 0; $i -lt 20; $i++) {
-            if (Ollama-Responde $UrlOllama) { break }
+            if (Ollama-Abierto $UrlOllama) { break }
             Start-Sleep -Seconds 1
         }
     } else {
-        Aviso "No encontre Ollama (https://ollama.com). El backend y Coordinacion funcionan, pero el chat del estudiante no."
+        Aviso "No encontre Ollama (https://ollama.com) ni nada escucha en $UrlOllama. El backend y Coordinacion funcionan, pero el chat del estudiante no."
     }
 }
-if (Ollama-Responde $UrlOllama) {
-    $modelos = @((Invoke-RestMethod "$UrlOllama/api/tags").models | ForEach-Object { $_.name })
-    $esta = @($modelos | Where-Object { $_ -eq $ModeloAgente -or $_ -like ($ModeloAgente + ":*") }).Count -gt 0
-    if ($esta) {
-        Write-Host "Ollama listo con el modelo $ModeloAgente." -ForegroundColor Green
+if (Ollama-Abierto $UrlOllama) {
+    $lista = Ollama-Modelos $UrlOllama
+    if (-not $lista.ok) {
+        Aviso "Ollama esta abierto, pero no pude leer su lista de modelos ($($lista.motivo)). Sigo igual: el estado del agente, mas abajo, dice si el modelo esta."
     } else {
-        Aviso "Ollama responde, pero no tiene el modelo '$ModeloAgente'. Descargalo con:  ollama pull $ModeloAgente   (o cambia AURA_OLLAMA_MODEL en src\backend\.env por uno de 'ollama list')."
+        $esta = @($lista.nombres | Where-Object { $_ -eq $ModeloAgente -or $_ -like ($ModeloAgente + ":*") }).Count -gt 0
+        if ($esta) {
+            Write-Host "Ollama abierto con el modelo $ModeloAgente." -ForegroundColor Green
+        } else {
+            Aviso "Ollama esta abierto, pero no tiene el modelo '$ModeloAgente'. Descargalo con:  ollama pull $ModeloAgente   (o cambia AURA_OLLAMA_MODEL en src\backend\.env por uno de 'ollama list')."
+        }
     }
 } elseif ($ollama) {
-    Aviso "Inicie Ollama pero no respondio en 20 s. Reintenta o abrelo a mano; el chat no funcionara hasta entonces."
+    Aviso "Inicie Ollama pero nada escucha en $UrlOllama despues de 20 s. Abrelo a mano; el chat no funcionara hasta entonces."
 }
 
 # ---------------------------------------------------------------- Puertos
