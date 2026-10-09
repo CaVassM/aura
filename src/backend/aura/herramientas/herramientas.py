@@ -52,7 +52,19 @@ class HerramientasAgente:
                 "motivo_vacio": "solicitud_invalida",
                 "detalle": str(error),
             }
-        mejores = self._mejores(modelo, k, excluir=frozenset(excluir_servicios or ()))
+        # Un servicio puede tener varios cupos a la misma hora: para la persona son la misma opción. Se buscan
+        # de más y se muestra una sola por (servicio, fecha, hora, canal); al reservar se toma el cupo que quede.
+        candidatas = self._mejores(modelo, k * 10, excluir=frozenset(excluir_servicios or ()))
+        mejores, vistas = [], set()
+        for op in candidatas:
+            cupo = self.agenda.cupo_por_id[op.cupo_id]
+            clave = (cupo.service_id, cupo.fecha, cupo.hora_inicio, op.canal)
+            if clave in vistas:
+                continue
+            vistas.add(clave)
+            mejores.append(op)
+            if len(mejores) == k:
+                break
         if not mejores:
             return {
                 "opciones": [],

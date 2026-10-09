@@ -145,3 +145,17 @@ class HerramientasTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_proponer_no_repite_el_mismo_servicio_a_la_misma_hora(client_fresco, estado_fresco):
+    """Varios cupos a la misma hora del mismo servicio son una sola opción para la persona."""
+    solicitud = {
+        "estudiante_id": "E_DUP",
+        "motivo": "academic_pressure",
+        "distrito": "DIST_NEBULA",
+        "franjas": [{"dia": d, "desde": "09:00", "hasta": "21:00"} for d in ("Mon", "Tue", "Wed", "Thu", "Fri")],
+        "canales_aceptables": ["digital", "phone", "in_person"],
+    }
+    opciones = client_fresco.post("/api/appointments/proposals?k=20", json=solicitud).json()["opciones"]
+    claves = [(o["service_id"], o["fecha"], o["hora_inicio"], o["canal"]) for o in opciones]
+    assert opciones and len(claves) == len(set(claves))
