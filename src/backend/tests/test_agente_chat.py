@@ -25,6 +25,10 @@ PARAMS_PROPONER = {
 }
 
 
+# Mensaje con lo mínimo que exige el agente para buscar: días y canal dichos por la persona.
+MSG = "Tengo parciales, puedo el miércoles por videollamada"
+
+
 def llamada(nombre: str, **args) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": nombre, "args": args, "id": uuid.uuid4().hex}])
 
@@ -88,7 +92,7 @@ def proponer_y_responder(mensajes):
 
 def test_proponer_devuelve_tarjetas_sin_reservar(montar, estado_fresco):
     cliente, _ = montar(proponer_y_responder)
-    r = cliente.post("/api/chat", json={"mensaje": "Estoy estresada por los parciales", "estudiante_id": "E1"})
+    r = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"})
     assert r.status_code == 200, r.text
     cuerpo = r.json()
     assert cuerpo["session_id"] and cuerpo["respuesta"].startswith("Encontré")
@@ -104,15 +108,13 @@ def test_reservar_en_el_segundo_mensaje_crea_la_cita_para_la_persona(montar, est
             humanos = [m for m in mensajes if m.type == "human"]
             if len(humanos) == 1:
                 return llamada("proponer_opciones", **PARAMS_PROPONER)
-            # el modelo recuerda el opcion_id del turno anterior (viene en el historial)
-            previo = next(m for m in mensajes if isinstance(m, ToolMessage))
-            return llamada("reservar_cita", opcion_id=json.loads(previo.content)["opciones"][0]["opcion_id"])
+            return llamada("reservar_cita", numero=1)  # «la primera»
         if "cita" in r:
             return AIMessage(f"Listo, cita {r['cita']['cita_id']}.")
         return AIMessage("Estas son las opciones.")
 
     cliente, _ = montar(guion)
-    primero = cliente.post("/api/chat", json={"mensaje": "Tengo parciales", "estudiante_id": "E1"}).json()
+    primero = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()
     segundo = cliente.post(
         "/api/chat", json={"mensaje": "La primera", "estudiante_id": "E1", "session_id": primero["session_id"]}
     ).json()
@@ -124,17 +126,17 @@ def test_reservar_en_el_segundo_mensaje_crea_la_cita_para_la_persona(montar, est
     assert len(citas_de(estado_fresco, "E1")) == 1
 
 
-def test_no_reserva_ids_inventados(montar, estado_fresco):
+def test_no_reserva_opciones_inexistentes(montar, estado_fresco):
     def guion(mensajes):
         r = ultimo_resultado(mensajes)
         if r is None:
             return llamada("proponer_opciones", **PARAMS_PROPONER)
         if "opciones" in r:
-            return llamada("reservar_cita", opcion_id="C9999999|digital")
+            return llamada("reservar_cita", numero=9)
         return AIMessage(f"No pude: {r['error']}")
 
     cliente, _ = montar(guion)
-    r = cliente.post("/api/chat", json={"mensaje": "hola", "estudiante_id": "E1"}).json()
+    r = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()
     assert r["cita"] is None and r["respuesta"] == "No pude: opcion_no_propuesta"
     assert citas_de(estado_fresco, "E1") == []
 
@@ -150,7 +152,7 @@ def test_el_modelo_no_puede_cancelar_citas_de_otra_persona(montar, estado_fresco
         return llamada("cancelar_cita", cita_id=ajena) if r is None else AIMessage(r.get("error", "cancelada"))
 
     cliente, _ = montar(guion)
-    r = cliente.post("/api/chat", json={"mensaje": "cancela la CITA ajena", "estudiante_id": "OTRA"}).json()
+    r = cliente.post("/api/chat", json={"mensaje": "cancela la cita CITA-0000001", "estudiante_id": "OTRA"}).json()
     assert r["respuesta"] == "cita_no_encontrada" and r["cita_cancelada"] is None
     assert len(citas_de(estado_fresco, "DUENA")) == 1
 
@@ -162,17 +164,16 @@ def test_cancelar_propia_libera_el_cupo(montar, estado_fresco):
         if r is None and humanos == 1:
             return llamada("proponer_opciones", **PARAMS_PROPONER)
         if r is None and humanos == 2:
-            previo = next(m for m in mensajes if isinstance(m, ToolMessage))
-            return llamada("reservar_cita", opcion_id=json.loads(previo.content)["opciones"][0]["opcion_id"])
+            return llamada("reservar_cita", numero=1)
         if r is None:
             ultima = [m for m in mensajes if isinstance(m, ToolMessage)][-1]
             return llamada("cancelar_cita", cita_id=json.loads(ultima.content)["cita"]["cita_id"])
         return AIMessage("ok")
 
     cliente, _ = montar(guion)
-    sid = cliente.post("/api/chat", json={"mensaje": "1", "estudiante_id": "E1"}).json()["session_id"]
-    cliente.post("/api/chat", json={"mensaje": "2", "estudiante_id": "E1", "session_id": sid})
-    r = cliente.post("/api/chat", json={"mensaje": "3", "estudiante_id": "E1", "session_id": sid}).json()
+    sid = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()["session_id"]
+    cliente.post("/api/chat", json={"mensaje": "la primera", "estudiante_id": "E1", "session_id": sid})
+    r = cliente.post("/api/chat", json={"mensaje": "mejor cancélala", "estudiante_id": "E1", "session_id": sid}).json()
     assert r["cita_cancelada"]["estado"] == "cancelada"
     assert citas_de(estado_fresco, "E1") == []
 
@@ -189,7 +190,7 @@ def test_desencuentro_usa_la_ultima_busqueda_sin_que_el_modelo_la_repita(montar,
         return AIMessage("Avisé al equipo.")
 
     cliente, _ = montar(guion)
-    r = cliente.post("/api/chat", json={"mensaje": "domingo de madrugada", "estudiante_id": "E1"}).json()
+    r = cliente.post("/api/chat", json={"mensaje": "solo puedo el domingo de madrugada, por teléfono", "estudiante_id": "E1"}).json()
     assert r["desencuentro_registrado"] and r["opciones"] == []
     [fila] = [d for d in estado_fresco.desencuentros if d["estudiante_id"] == "E1"]
     assert fila["motivo"] == "academic_pressure"
@@ -210,17 +211,17 @@ def test_falta_distrito_si_no_se_conoce(montar):
         return llamada("proponer_opciones", **sin_distrito) if r is None else AIMessage(r.get("error", "ok"))
 
     cliente, _ = montar(guion)
-    assert cliente.post("/api/chat", json={"mensaje": "hola", "estudiante_id": "E1"}).json()["respuesta"] == "falta_distrito"
+    assert cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()["respuesta"] == "falta_distrito"
     con_contexto = cliente.post(
-        "/api/chat", json={"mensaje": "hola", "estudiante_id": "E1", "distrito": "dist_gaia"}
+        "/api/chat", json={"mensaje": MSG, "estudiante_id": "E1", "distrito": "dist_gaia"}
     ).json()
     assert con_contexto["respuesta"] == "ok" and con_contexto["opciones"]
 
 
 def test_sesiones_son_de_su_dueno_y_se_pueden_leer_y_borrar(montar):
     cliente, _ = montar(proponer_y_responder)
-    sid = cliente.post("/api/chat", json={"mensaje": "hola", "estudiante_id": "E1"}).json()["session_id"]
-    ajeno = cliente.post("/api/chat", json={"mensaje": "hola", "estudiante_id": "E2", "session_id": sid})
+    sid = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()["session_id"]
+    ajeno = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E2", "session_id": sid})
     assert ajeno.status_code == 404
     historial = cliente.get(f"/api/chat/{sid}", params={"estudiante_id": "E1"}).json()
     assert [m["rol"] for m in historial["mensajes"]] == ["user", "agent"]
@@ -231,8 +232,8 @@ def test_sesiones_son_de_su_dueno_y_se_pueden_leer_y_borrar(montar):
 def test_validaciones_de_entrada(montar):
     cliente, _ = montar(proponer_y_responder)
     assert cliente.post("/api/chat", json={"mensaje": "", "estudiante_id": "E1"}).status_code == 422
-    assert cliente.post("/api/chat", json={"mensaje": "hola", "estudiante_id": "E1", "distrito": "X"}).status_code == 422
-    assert cliente.post("/api/chat", json={"mensaje": "hola", "estudiante_id": "E1", "grupo": "tarde"}).status_code == 422
+    assert cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1", "distrito": "X"}).status_code == 422
+    assert cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1", "grupo": "tarde"}).status_code == 422
 
 
 def test_modelo_sin_respuesta_usa_texto_de_respaldo(montar):
@@ -243,7 +244,7 @@ def test_modelo_sin_respuesta_usa_texto_de_respaldo(montar):
         return AIMessage("")
 
     cliente, _ = montar(guion)
-    r = cliente.post("/api/chat", json={"mensaje": "hola", "estudiante_id": "E1"}).json()
+    r = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()
     assert r["respuesta"]  # nunca llega vacío a la burbuja
 
 
@@ -256,7 +257,7 @@ def test_ollama_apagado_es_503_con_instrucciones(settings, estado_fresco):
 
     agente = AgenteAura(modelo=Roto(guion=None))
     with TestClient(create_app(settings, estado_fresco, agente=agente)) as cliente:
-        r = cliente.post("/api/chat", json={"mensaje": "hola", "estudiante_id": "E1"})
+        r = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"})
     assert r.status_code == 503 and r.json()["error"] == "agente_no_disponible"
     assert "ollama serve" in r.json()["detalle"]
 
@@ -267,3 +268,39 @@ def test_estado_del_agente_responde_sin_ollama(montar, monkeypatch):
     r = cliente.get("/api/chat/estado")
     assert r.status_code == 200
     assert r.json()["ollama_disponible"] is False and r.json()["modelo"] == "gemma4"
+
+
+def test_no_busca_si_la_persona_no_dijo_dias_ni_canal(montar, estado_fresco):
+    """«¿qué servicios existen?» no debe disparar una búsqueda con días y canal inventados por el modelo."""
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        return llamada("proponer_opciones", **PARAMS_PROPONER) if r is None else AIMessage(r.get("error", "buscó"))
+
+    cliente, _ = montar(guion)
+    r = cliente.post("/api/chat", json={"mensaje": "¿Qué servicios existen?", "estudiante_id": "E1"}).json()
+    assert r["respuesta"] == "faltan_datos" and r["opciones"] == []
+    solo_dias = cliente.post(
+        "/api/chat", json={"mensaje": "puedo el lunes", "estudiante_id": "E1", "session_id": r["session_id"]}
+    ).json()
+    assert solo_dias["respuesta"] == "faltan_datos"  # sigue faltando el canal
+    completo = cliente.post(
+        "/api/chat", json={"mensaje": "da igual el canal", "estudiante_id": "E1", "session_id": r["session_id"]}
+    ).json()
+    assert completo["respuesta"] == "buscó" and completo["opciones"]  # los días del mensaje anterior cuentan
+
+
+def test_el_modelo_no_ve_identificadores_internos(montar):
+    vistos = []
+
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        if r is None:
+            return llamada("proponer_opciones", **PARAMS_PROPONER)
+        vistos.append(json.dumps(r, ensure_ascii=False))
+        return AIMessage("ok")
+
+    cliente, _ = montar(guion)
+    cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"})
+    assert vistos and "|" not in vistos[0] and '"C0' not in vistos[0] and "SRV_" not in vistos[0]
+    opcion = json.loads(vistos[0])["opciones"][0]
+    assert opcion["numero"] == 1 and "miércoles" in opcion["texto"] and "noviembre" in opcion["texto"]

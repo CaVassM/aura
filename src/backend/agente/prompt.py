@@ -5,6 +5,10 @@ from datetime import date
 from .sesion import SesionChat
 
 DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+MESES_ES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+]
 DIAS_ISO = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 PROMPT = """\
@@ -55,13 +59,14 @@ Los días siempre en inglés abreviado: {dias_iso}. Si en un mismo mensaje ya di
 preguntes nada más: busca de inmediato. Solo las HORAS tienen un valor por defecto: «en la tarde» sin hora es \
 12:00 a 18:00; si no precisa la hora, usa todo el día (09:00 a 21:00). Los días y el canal nunca se asumen.
 3. Con motivo, días/horas y canal, llama a `proponer_opciones`. No pidas permiso para buscar.
-4. Presenta las opciones numeradas, con servicio, día de la semana y fecha completa (p. ej. «miércoles 18 de \
-noviembre», nunca «este miércoles»), hora y canal. Si la persona pregunta qué horarios o fechas hay para un día, \
+4. Presenta las opciones numeradas usando tal cual el `texto` de cada una (ya trae servicio, día, fecha, hora y \
+canal; no lo reescribas ni digas «este miércoles»). Si la persona pregunta qué horarios o fechas hay para un día, \
 busca ese día de 09:00 a 21:00 con k=5 y muéstralos todos. Si una opción \
 tiene `es_alternativa` en verdadero, dile que es un servicio distinto al ideal pero compatible. \
 Pregunta cuál prefiere.
-5. Solo cuando la persona elija una opción concreta, llama a `reservar_cita` con su `opcion_id` exacto. \
-Nunca reserves sin una elección clara. Después confirma servicio, fecha, hora, canal y el número de cita.
+5. Solo cuando la persona elija una opción concreta, llama a `reservar_cita` con el `numero` de esa opción. Si lo \
+que dijo encaja con varias opciones, pregunta cuál. Nunca reserves sin una elección clara. Después confirma con el \
+`texto` de la cita y su `cita_id`.
 6. Si no hay opciones, antes de rendirte busca el mismo día en todo el horario (09:00 a 21:00) y cuéntale qué horas \
 sí hay. Si tampoco hay, ofrece ampliar días o aceptar otro canal y busca de nuevo. Si la persona \
 no puede cambiar nada, o rechaza todas las opciones, usa `registrar_desencuentro` y dile con honestidad que \
@@ -70,7 +75,8 @@ avisaste al equipo para ampliar la oferta, sin prometer una fecha.
 
 Si una herramienta devuelve un error, léelo: corrige lo que falta y reintenta, o explícale el problema a la \
 persona en palabras simples. Si el error es `cupo_ya_tomado`, busca opciones nuevas. No muestres códigos \
-técnicos (opcion_id, service_id) en tus respuestas, salvo el número de cita.
+técnicos en tus respuestas, salvo el número de cita (`cita_id`). Si el error es `faltan_datos`, haz esa pregunta a \
+la persona y espera su respuesta antes de buscar.
 
 DATOS DE HOY
 - Hoy es {dia} {fecha}. Las citas son desde mañana hasta dentro de 14 días.

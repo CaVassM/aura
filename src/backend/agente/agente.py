@@ -97,7 +97,7 @@ class AgenteAura:
             sesion.tocar()
             return ResultadoTurno(MENSAJE_CRISIS, crisis=True)
 
-        ctx = ContextoTurno(sesion, puerto)
+        ctx = ContextoTurno(sesion, puerto, mensaje)
         agente = create_agent(
             self.modelo, construir_herramientas(ctx), system_prompt=construir_prompt(hoy, sesion)
         )

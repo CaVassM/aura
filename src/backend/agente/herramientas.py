@@ -2,7 +2,9 @@
 
 Diferencias deliberadas con las herramientas del motor (`aura.herramientas`):
 - El modelo NO elige el `estudiante_id`: sale de la sesión, así nadie reserva ni cancela a nombre de otra persona.
-- `reservar_cita` solo acepta un `opcion_id` de la última propuesta de esta sesión (evita ids inventados).
+- `reservar_cita` recibe el NÚMERO de la opción elegida (1, 2, 3…) de la última lista; el modelo nunca ve ni copia
+  identificadores internos, así que no puede inventarlos ni mostrárselos a la persona.
+- `proponer_opciones` se niega a buscar si la persona no ha dicho días ni canal (ver `entrada.py`).
 - `registrar_desencuentro` no recibe argumentos: usa la última solicitud buscada.
 - Las respuestas son JSON compacto y en español, listo para que el modelo lo redacte.
 """
@@ -14,7 +16,8 @@ from datetime import date
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from .prompt import DIAS_ES
+from . import entrada
+from .prompt import DIAS_ES, MESES_ES
 from .puerto import PuertoAgenda
 from .sesion import SesionChat
 
@@ -32,6 +35,7 @@ class EventoHerramienta:
 class ContextoTurno:
     sesion: SesionChat
     puerto: PuertoAgenda
+    mensaje: str = ""  # el mensaje que se está respondiendo (aún no está en sesion.mensajes)
     eventos: list[EventoHerramienta] = field(default_factory=list)
 
 
@@ -58,7 +62,7 @@ class ProponerArgs(BaseModel):
 
 
 class ReservarArgs(BaseModel):
-    opcion_id: str = Field(description="El `opcion_id` exacto de la opción que la persona eligió, p. ej. C0000123|digital")
+    numero: int = Field(ge=1, description="Número de la opción que la persona eligió en la última lista (1, 2, 3…)")
 
 
 class CancelarArgs(BaseModel):
@@ -77,32 +81,26 @@ def _dia_es(fecha_iso: str) -> str:
     return DIAS_ES[date.fromisoformat(fecha_iso).weekday()]
 
 
-def _opcion_para_modelo(o: dict) -> dict:
-    return {
-        "opcion_id": o["opcion_id"],
-        "servicio": o["servicio_nombre"],
-        "tipo": o.get("tipo_label", o["tipo"]),
-        "distrito": o["distrito"],
-        "fecha": o["fecha"],
-        "dia_semana": o.get("dia_semana") or _dia_es(o["fecha"]),
-        "hora_inicio": o["hora_inicio"],
-        "hora_fin": o["hora_fin"],
-        "canal": o.get("canal_label", o["canal"]),
-        "es_alternativa": o["es_alternativa"],
-        "dias_de_espera": o["dias_espera"],
-    }
+def _fecha_texto(fecha_iso: str) -> str:
+    f = date.fromisoformat(fecha_iso)
+    return f"{DIAS_ES[f.weekday()]} {f.day} de {MESES_ES[f.month - 1]}"
+
+
+def _opcion_para_modelo(numero: int, o: dict) -> dict:
+    canal = o.get("canal_label", o["canal"])
+    tipo = o.get("tipo_label", o["tipo"])
+    texto = f"{o['servicio_nombre']} ({tipo}) · {_fecha_texto(o['fecha'])}, de {o['hora_inicio']} a {o['hora_fin']} · {canal}"
+    if o["es_alternativa"]:
+        texto += " · servicio distinto al ideal, pero compatible"
+    return {"numero": numero, "texto": texto, "distrito": o["distrito"], "dias_de_espera": o["dias_espera"]}
 
 
 def _cita_para_modelo(c: dict) -> dict:
+    canal = c.get("canal_label", c["canal"])
     return {
         "cita_id": c["id"],
-        "servicio": c["servicio_nombre"],
-        "tipo": c.get("tipo_label", c["tipo"]),
-        "fecha": c["fecha"],
-        "dia_semana": c.get("dia_semana") or _dia_es(c["fecha"]),
-        "hora_inicio": c["hora_inicio"],
-        "hora_fin": c["hora_fin"],
-        "canal": c.get("canal_label", c["canal"]),
+        "texto": f"{c['servicio_nombre']} ({c.get('tipo_label', c['tipo'])}) · {_fecha_texto(c['fecha'])}, "
+        f"de {c['hora_inicio']} a {c['hora_fin']} · {canal}",
         "estado": c["estado"],
     }
 
@@ -121,6 +119,16 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
         grupo: str = "",
         k: int = 3,
     ) -> str:
+        textos = [m.content for m in sesion.mensajes if m.type == "human" and isinstance(m.content, str)]
+        faltan = entrada.faltantes(textos + [ctx.mensaje])
+        if faltan:
+            resultado = {
+                "ok": False,
+                "error": "faltan_datos",
+                "detalle": "La persona todavía no dijo " + " ni ".join(faltan) + ". Pregúntaselo; no los inventes ni busques todavía.",
+            }
+            registrar("proponer_opciones", False, resultado)
+            return _json(resultado)
         distrito = distrito or sesion.contexto.distrito
         if not distrito:
             return _json({"ok": False, "error": "falta_distrito", "detalle": "Pregunta en qué distrito está la persona."})
@@ -152,24 +160,25 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
                     ),
                 }
             )
-        return _json({"opciones": [_opcion_para_modelo(o) for o in resultado["opciones"]]})
+        return _json(
+            {
+                "opciones": [_opcion_para_modelo(i, o) for i, o in enumerate(resultado["opciones"], 1)],
+                "indicacion": "Muestra cada opción con su `texto`, numeradas, y pregunta cuál prefiere.",
+            }
+        )
 
-    def reservar_cita(opcion_id: str) -> str:
-        opcion_id = opcion_id.strip()
-        if opcion_id not in sesion.propuestas:
-            # El modelo a veces omite el canal: si el cupo coincide con una sola opción, se usa esa.
-            coincidencias = [i for i in sesion.propuestas if i.split("|")[0] == opcion_id.split("|")[0]]
-            if len(coincidencias) == 1:
-                opcion_id = coincidencias[0]
-            else:
-                resultado = {
-                    "ok": False,
-                    "error": "opcion_no_propuesta",
-                    "detalle": "Ese opcion_id no está en las opciones que mostraste. Usa uno de la lista.",
-                    "opcion_ids_validos": list(sesion.propuestas),
-                }
-                registrar("reservar_cita", False, resultado)
-                return _json(resultado)
+    def reservar_cita(numero: int) -> str:
+        opciones = list(sesion.propuestas.values())
+        if not 1 <= numero <= len(opciones):
+            resultado = {
+                "ok": False,
+                "error": "opcion_no_propuesta",
+                "detalle": f"No hay una opción {numero} en la última lista"
+                + (f" (van del 1 al {len(opciones)})." if opciones else "; primero busca opciones con proponer_opciones."),
+            }
+            registrar("reservar_cita", False, resultado)
+            return _json(resultado)
+        opcion_id = opciones[numero - 1]["opcion_id"]
         resultado = puerto.reservar(sesion.estudiante_id, opcion_id, sesion.servicio_ideal)
         registrar("reservar_cita", bool(resultado.get("ok")), resultado)
         if not resultado.get("ok"):
@@ -222,8 +231,8 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             func=reservar_cita,
             name="reservar_cita",
             description=(
-                "Reserva la opción que la persona eligió de la última lista mostrada. Úsala SOLO tras una elección "
-                "clara. Devuelve el comprobante de la cita o un error."
+                "Reserva la opción que la persona eligió de la última lista mostrada, por su número. Úsala SOLO tras "
+                "una elección clara. Devuelve el comprobante de la cita o un error."
             ),
             args_schema=ReservarArgs,
         ),

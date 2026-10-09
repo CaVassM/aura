@@ -82,7 +82,7 @@ def test_chat_de_punta_a_punta_con_chatollama(settings, estado_fresco, ollama_fa
     monkeypatch.setenv("AURA_OLLAMA_KEEP_ALIVE", "45m")
     config = ConfigAgente.desde_entorno()
     with TestClient(create_app(settings, estado_fresco, agente=AgenteAura(config))) as cliente:
-        r = cliente.post("/api/chat", json={"mensaje": "Tengo parciales y estoy agobiada", "estudiante_id": "E1"})
+        r = cliente.post("/api/chat", json={"mensaje": "Tengo parciales y estoy agobiada, puedo el miércoles por videollamada", "estudiante_id": "E1"})
         assert r.status_code == 200, r.text
         cuerpo = r.json()
         assert cuerpo["respuesta"].startswith("Encontré") and cuerpo["opciones"]
@@ -96,6 +96,6 @@ def test_chat_de_punta_a_punta_con_chatollama(settings, estado_fresco, ollama_fa
         "proponer_opciones", "reservar_cita", "cancelar_cita", "listar_mis_citas", "registrar_desencuentro",
     }
     assert primero["messages"][0]["role"] == "system" and "AURA" in primero["messages"][0]["content"]
-    assert primero["messages"][-1] == {"role": "user", "content": "Tengo parciales y estoy agobiada"}
+    assert primero["messages"][-1] == {"role": "user", "content": "Tengo parciales y estoy agobiada, puedo el miércoles por videollamada"}
     # el modelo no puede elegir el estudiante: ningún esquema lo pide
     assert "estudiante_id" not in json.dumps([t["function"]["parameters"] for t in primero["tools"]])
