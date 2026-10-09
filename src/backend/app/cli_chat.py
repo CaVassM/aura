@@ -37,7 +37,10 @@ def main() -> None:
     print("Preparando la demo…")
     estado = crear_estado_sembrado(Settings.desde_entorno())
     servicio = ChatService(estado, AgenteAura(config))
-    print(f"Hoy (simulado): {estado.hoy}. Escribe tu mensaje. /nuevo, /citas, /desencuentros, /salir.\n")
+    print(f"Hoy (simulado): {estado.hoy}. Escribe tu mensaje. /nuevo, /citas, /desencuentros, /salir.")
+    if args.distrito:
+        print(f"Distrito del perfil: {args.distrito} (se usa para citas presenciales; en la conversación se puede cambiar).")
+    print()
 
     sesion = None
     while True:

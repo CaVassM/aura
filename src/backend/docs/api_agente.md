@@ -24,10 +24,10 @@ Cuerpo (JSON):
 | `mensaje` | string (1–2000) | sí | Lo que escribe la persona |
 | `estudiante_id` | string | sí | Identificador de la persona. **El agente lo usa como dueño de las citas; el modelo no puede cambiarlo** |
 | `session_id` | string | no | Omítelo en el primer mensaje; en los siguientes reenvía el que devolvió la respuesta. Si no existe o es de otra persona: `404` |
-| `distrito` | string | no | Ej. `DIST_GAIA`. Si el portal ya lo conoce, el agente no lo pregunta. Distritos: `DIST_GAIA`, `DIST_NEBULA`, `DIST_VECTOR`, `DIST_HORIZON`, `DIST_QUANTUM` (otro valor: `422`) |
-| `grupo` | `diurno` \| `nocturno` | no | Turno de la persona. Si no se envía, el agente asume `diurno` |
+| `distrito` | string | no | Distrito donde vive la persona, p. ej. `DIST_GAIA`; se usa para citas presenciales. Si el portal ya lo conoce, el agente no lo pregunta; durante la conversación la persona puede cambiarlo («esta semana estoy por Vector») y el cambio queda para la sesión. Distritos: `DIST_GAIA`, `DIST_NEBULA`, `DIST_VECTOR`, `DIST_HORIZON`, `DIST_QUANTUM` (otro valor: `422`) |
+| `grupo` | `diurno` \| `nocturno` | no | Turno en que estudia. Normalmente **no se envía**: el agente lo toma de lo que la persona cuente (y lo guarda en la sesión); si no lo dijo, lo infiere de las horas que pide (todo desde las 18:00 → `nocturno`) o asume `diurno`, sin guardarlo |
 
-`distrito` y `grupo` se recuerdan en la sesión; basta enviarlos una vez.
+`distrito` y `grupo` se recuerdan en la sesión; basta enviarlos una vez. El portal debería avisar al abrir el chat qué distrito usa (el frontend lo hace en el saludo).
 
 ```json
 {
@@ -44,8 +44,8 @@ Respuesta `200`:
 |---|---|---|
 | `session_id` | string | Guárdalo y reenvíalo en el siguiente mensaje |
 | `respuesta` | string | Texto del agente para la burbuja |
-| `opciones` | lista | Si el agente **acaba de proponer** citas: tarjetas para mostrar (mismos campos que `OpcionOut` de `POST /appointments/proposals`). **No hay nada reservado todavía**: la persona elige escribiendo (o el portal envía «la opción 2» como mensaje) |
-| `cita` | objeto \| null | Cita reservada en este mensaje (mismo formato que `CitaOut` de `/appointments`) |
+| `opciones` | lista | Si el agente **acaba de proponer** citas: tarjetas para mostrar (mismos campos que `OpcionOut` de `POST /appointments/proposals`). **No hay nada reservado todavía**: la persona elige escribiendo, o el portal envía «quiero la opción 2» como mensaje al tocar una tarjeta (la numeración es el orden de la lista `opciones`, desde 1) |
+| `cita` | objeto \| null | Cita reservada en este mensaje (mismo formato que `CitaOut` de `/appointments`: `id`, `servicio_nombre`, `tipo`, `tipo_label`, `distrito`, `hora_fin`, `slot.fecha_iso`, `canal`, `estado`) |
 | `cita_cancelada` | objeto \| null | Cita cancelada en este mensaje |
 | `desencuentro_registrado` | bool | El agente avisó al equipo que no había opción compatible |
 | `alerta_crisis` | bool | El mensaje activó el protocolo de ayuda inmediata (la respuesta es un texto fijo que remite a emergencias y a la línea de ayuda de la institución; no se llamó al modelo) |

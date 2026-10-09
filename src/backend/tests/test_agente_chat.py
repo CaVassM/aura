@@ -335,3 +335,79 @@ def test_no_cancela_si_la_persona_solo_comenta_o_duda(montar, estado_fresco):
     confirma = decir("sí")
     assert confirma["cita_cancelada"]["estado"] == "cancelada"
     assert citas_de(estado_fresco, "E1") == []
+
+
+SIN_CUPOS = {**PARAMS_PROPONER, "franjas": [{"dia": "Sun", "desde": "03:00", "hasta": "04:00"}], "canales_aceptables": ["phone"]}
+MSG_SIN_CUPOS = "solo puedo el domingo de madrugada, por teléfono"
+
+
+def buscar_y_registrar(**extra):
+    """Busca (sin cupos) y registra el desencuentro: deja en el motor lo que la herramienta envió."""
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        if r is None:
+            return llamada("proponer_opciones", **{**SIN_CUPOS, **extra})
+        if r.get("motivo_vacio"):
+            return llamada("registrar_desencuentro")
+        return AIMessage("listo")
+
+    return guion
+
+
+def test_el_turno_que_la_persona_menciona_se_guarda_para_la_sesion(montar, estado_fresco):
+    cliente, _ = montar(buscar_y_registrar(grupo="nocturno"))
+    sid = cliente.post("/api/chat", json={"mensaje": MSG_SIN_CUPOS, "estudiante_id": "E1"}).json()["session_id"]
+    # el modelo ya no repite el turno: sale de lo guardado
+    cliente.post("/api/chat", json={"mensaje": MSG_SIN_CUPOS, "estudiante_id": "E1", "session_id": sid})
+    filas = [d for d in estado_fresco.desencuentros if d["estudiante_id"] == "E1"]
+    assert [d["grupo"] for d in filas][0] == "nocturno"
+    assert estado_fresco.chats.obtener(sid).contexto.grupo == "nocturno"
+
+
+@pytest.mark.parametrize(
+    "desde, esperado", [("19:00", "nocturno"), ("09:00", "diurno")]
+)
+def test_sin_dato_explicito_el_turno_se_infiere_de_las_horas(montar, estado_fresco, desde, esperado):
+    franjas = [{"dia": "Sun", "desde": desde, "hasta": "23:00" if desde == "19:00" else "11:00"}]
+    cliente, _ = montar(buscar_y_registrar(franjas=franjas))
+    r = cliente.post("/api/chat", json={"mensaje": MSG_SIN_CUPOS, "estudiante_id": "E1"}).json()
+    [fila] = [d for d in estado_fresco.desencuentros if d["estudiante_id"] == "E1"]
+    assert fila["grupo"] == esperado
+    assert estado_fresco.chats.obtener(r["session_id"]).contexto.grupo is None  # lo inferido no se guarda como dato
+
+
+def test_cambiar_de_distrito_en_la_conversacion_se_recuerda(montar, estado_fresco):
+    cliente, _ = montar(buscar_y_registrar(distrito="Nébula"))
+    r = cliente.post(
+        "/api/chat", json={"mensaje": MSG_SIN_CUPOS, "estudiante_id": "E1", "distrito": "DIST_GAIA"}
+    ).json()
+    [fila] = [d for d in estado_fresco.desencuentros if d["estudiante_id"] == "E1"]
+    assert fila["distrito"] == "DIST_NEBULA"
+    assert estado_fresco.chats.obtener(r["session_id"]).contexto.distrito == "DIST_NEBULA"
+
+
+def test_un_distrito_inexistente_no_pisa_el_del_perfil(montar, estado_fresco):
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        return llamada("proponer_opciones", **{**PARAMS_PROPONER, "distrito": "Miraflores"}) if r is None else AIMessage(r.get("detalle", "ok"))
+
+    cliente, _ = montar(guion)
+    r = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1", "distrito": "DIST_GAIA"}).json()
+    assert "DIST_GAIA" in r["respuesta"]  # el error lista los distritos válidos
+    assert estado_fresco.chats.obtener(r["session_id"]).contexto.distrito == "DIST_GAIA"
+
+
+def test_la_cita_trae_los_datos_que_necesita_el_frontend(montar):
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        if r is None:
+            return llamada("proponer_opciones", **PARAMS_PROPONER) if len([m for m in mensajes if m.type == "human"]) == 1 else llamada("reservar_cita", numero=1)
+        return AIMessage("ok")
+
+    cliente, _ = montar(guion)
+    sid = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()["session_id"]
+    cita = cliente.post("/api/chat", json={"mensaje": "la primera", "estudiante_id": "E1", "session_id": sid}).json()["cita"]
+    for campo in ("id", "servicio_nombre", "tipo", "tipo_label", "distrito", "hora_fin", "canal", "estado"):
+        assert cita[campo]
+    assert cita["slot"]["fecha_iso"].count("T") == 1
+    assert cliente.get("/api/appointments", params={"estudiante_id": "E1"}).json()[0]["tipo"] == cita["tipo"]

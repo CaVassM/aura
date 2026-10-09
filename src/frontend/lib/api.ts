@@ -1,23 +1,14 @@
 /**
- * Capa de datos de AURA.
+ * Capa de datos de AURA: todas las pantallas hablan con el backend FastAPI (src/backend) a través de
+ * este archivo; ningún componente hace fetch directo.
  *
- * HOY: todo está simulado (mock) con datos fijos y un pequeño delay,
- * para que la interfaz funcione de punta a punta sin depender del backend.
+ * - Estudiante (chat con el agente, "Mis citas"): contrato en src/backend/docs/api_agente.md.
+ * - Coordinación: contrato en src/backend/docs/api_coordinacion.md.
  *
- * CUANDO CAMILO/LEO EXPONGAN LOS ENDPOINTS:
- * reemplaza el cuerpo de cada función por un fetch() a
- * `${process.env.NEXT_PUBLIC_API_URL}/...`. La forma de cada función
- * (nombre, parámetros, lo que devuelve) no debería cambiar — por eso
- * los componentes nunca llaman a fetch directamente, siempre llaman
- * a estas funciones. Ver README sección 6 para el ejemplo completo.
+ * Todo el estado vive en la RAM del backend: si se reinicia, se pierden citas y conversaciones.
  */
 
-import {
-  Appointment,
-  ChatResponse,
-  ServiceOption,
-  TimeSlot,
-} from "./types";
+import { ChatRespuesta, Cita, HistorialChat } from "./types";
 import {
   DesencuentrosRespuesta,
   EstadoDemo,
@@ -29,119 +20,25 @@ import {
   ServiciosGeoJSON,
 } from "./types-coordinacion";
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-const MOCK_SERVICES: ServiceOption[] = [
-  {
-    id: "srv-1",
-    nombre: "Consejería psicológica individual",
-    modalidad: "presencial",
-    esperaEstimadaDias: 4,
-    descripcion: "Sesión 1:1 con un profesional de bienestar estudiantil.",
-  },
-  {
-    id: "srv-2",
-    nombre: "Orientación por chat con especialista",
-    modalidad: "online",
-    esperaEstimadaDias: 2,
-    descripcion: "Conversación guiada para casos de sobrecarga puntual.",
-  },
-  {
-    id: "srv-3",
-    nombre: "Línea de ayuda telefónica",
-    modalidad: "telefónico",
-    esperaEstimadaDias: 1,
-    descripcion: "Atención inmediata para hablar con alguien ahora mismo.",
-  },
-];
-
-/** Simula la respuesta del agente conversacional de AURA. */
-export async function sendMessage(text: string): Promise<ChatResponse> {
-  await delay(600);
-
-  const needsHelp =
-    /estr[eé]s|ansiedad|sobrecarga|agobiad|abrumad|cansad|ayuda|parcial/i.test(
-      text
-    );
-
-  if (!needsHelp) {
-    return {
-      reply:
-        "Cuéntame un poco más — ¿cómo te has sentido con la carga académica últimamente?",
-    };
-  }
-
-  return {
-    reply:
-      "Gracias por contarme. No diagnostico ni reemplazo atención profesional, pero puedo conectarte con un servicio disponible. Según lo que describes, estas opciones podrían ayudarte:",
-    services: MOCK_SERVICES,
-  };
-}
-
-/** Horarios disponibles para un servicio. */
-export async function getAvailableSlots(
-  serviceId: string
-): Promise<TimeSlot[]> {
-  await delay(400);
-  const base = new Date();
-  return Array.from({ length: 4 }).map((_, i) => {
-    const d = new Date(base);
-    d.setDate(base.getDate() + i + 1);
-    d.setHours(9 + i * 2, 0, 0, 0);
-    return {
-      id: `slot-${serviceId}-${i}`,
-      serviceId,
-      fechaISO: d.toISOString(),
-      disponible: true,
-    };
-  });
-}
-
-/** Confirma una cita y la guarda en localStorage (reemplazar por POST real). */
-export async function bookAppointment(
-  service: ServiceOption,
-  slot: TimeSlot
-): Promise<Appointment> {
-  await delay(500);
-  const appointment: Appointment = {
-    id: `apt-${Date.now()}`,
-    serviceId: service.id,
-    serviceName: service.nombre,
-    slot,
-    estado: "confirmada",
-  };
-
-  if (typeof window !== "undefined") {
-    const raw = window.localStorage.getItem("aura:appointments");
-    const list: Appointment[] = raw ? JSON.parse(raw) : [];
-    list.unshift(appointment);
-    window.localStorage.setItem("aura:appointments", JSON.stringify(list));
-  }
-
-  return appointment;
-}
-
-/** Lee las citas guardadas (mock de "Mis citas"). */
-export function getMyAppointments(): Appointment[] {
-  if (typeof window === "undefined") return [];
-  const raw = window.localStorage.getItem("aura:appointments");
-  return raw ? JSON.parse(raw) : [];
-}
-
 // ---------------------------------------------------------------------------
-// Coordinación: datos reales del backend (FastAPI). Ningún componente hace fetch directo.
+// Conexión con el backend
 // ---------------------------------------------------------------------------
 
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 ).replace(/\/$/, "");
 
-/** Error de la API. `sinConexion` es true cuando el backend no respondió. */
+/**
+ * Error de la API. `sinConexion` es true cuando el backend no respondió; `codigo` y `detalle` son los
+ * del cuerpo `{"error", "detalle"}` del backend (p. ej. `agente_no_disponible`).
+ */
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly sinConexion: boolean,
     readonly status?: number,
+    readonly codigo?: string,
+    readonly detalle?: string,
   ) {
     super(message);
   }
@@ -175,9 +72,11 @@ async function request<T>(
   }
   if (!respuesta.ok) {
     let detalle = "";
+    let codigo: string | undefined;
     try {
       const cuerpo = await respuesta.json();
       detalle = cuerpo.detalle || cuerpo.error || "";
+      codigo = cuerpo.error;
     } catch {
       /* respuesta sin JSON */
     }
@@ -185,6 +84,8 @@ async function request<T>(
       `El backend respondió ${respuesta.status}${detalle ? `: ${detalle}` : ""}.`,
       false,
       respuesta.status,
+      codigo,
+      detalle,
     );
   }
   return respuesta.json() as Promise<T>;
@@ -222,3 +123,49 @@ export const urlDesencuentrosCsv = (filtros: FiltrosDesencuentros = {}) =>
   `${API_BASE_URL}/api/coordinacion/desencuentros.csv${consulta({ ...filtros })}`;
 
 export const getReglas = () => request<Reglas>("/api/coordinacion/reglas");
+
+// ---------------------------------------------------------------------------
+// Estudiante: chat con el agente y citas
+// ---------------------------------------------------------------------------
+
+export interface EnvioChat {
+  mensaje: string;
+  estudiante_id: string;
+  /** Omitir en el primer mensaje; reenviar el que devolvió la respuesta anterior. */
+  session_id?: string | null;
+  /** Distrito del perfil (para citas presenciales); el agente permite cambiarlo conversando. */
+  distrito?: string;
+}
+
+/** Un mensaje a AURA. Puede tardar de segundos a más de un minuto (modelo local). */
+export const chatEnviar = (envio: EnvioChat) =>
+  request<ChatRespuesta>("/api/chat", undefined, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...envio, session_id: envio.session_id ?? undefined }),
+  });
+
+/** La conversación guardada (404 si la sesión ya no existe, p. ej. tras reiniciar el backend). */
+export const chatHistorial = (sessionId: string, estudianteId: string) =>
+  request<HistorialChat>(`/api/chat/${encodeURIComponent(sessionId)}`, {
+    estudiante_id: estudianteId,
+  });
+
+/** Borra la conversación (no cancela citas ya reservadas). */
+export const chatReiniciar = (sessionId: string, estudianteId: string) =>
+  request<{ ok: boolean }>(
+    `/api/chat/${encodeURIComponent(sessionId)}`,
+    { estudiante_id: estudianteId },
+    { method: "DELETE" },
+  );
+
+/** Citas de la persona (la más reciente primero). */
+export const getMisCitas = (estudianteId: string) =>
+  request<Cita[]>("/api/appointments", { estudiante_id: estudianteId });
+
+export const cancelarCita = (citaId: string, estudianteId: string) =>
+  request<Cita>(
+    `/api/appointments/${encodeURIComponent(citaId)}`,
+    { estudiante_id: estudianteId },
+    { method: "DELETE" },
+  );

@@ -1,7 +1,7 @@
 import { CalendarDays } from "lucide-react";
 import PortalShell from "@/components/PortalShell";
 import TopbarControls from "@/components/campus/TopbarControls";
-import { campusBrand, campusNav, campusUser } from "@/components/campus/nav";
+import { campusBrand, campusNav } from "@/components/campus/nav";
 import Placeholder from "@/components/ui/Placeholder";
 
 export default function CalendarioPage() {
@@ -13,7 +13,6 @@ export default function CalendarioPage() {
       brandSubtitle={campusBrand.subtitle}
       nav={campusNav}
       activeHref="/campus/calendario"
-      user={campusUser}
       exitHref="/"
       exitLabel="Salir del campus"
       title="Calendario académico"

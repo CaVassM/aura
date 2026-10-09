@@ -114,7 +114,10 @@ def canales(valor) -> tuple[str, ...]:
 
 
 def distrito(valor, distritos: set[str] | None) -> str:
-    texto = str(valor).strip().upper()
+    """`DIST_NEBULA`, `nebula` y `Nébula` son el mismo distrito."""
+    texto = _plano(valor).replace(" ", "_").upper()
+    if distritos is not None and texto not in distritos and f"DIST_{texto}" in distritos:
+        texto = f"DIST_{texto}"
     if distritos is not None and texto not in distritos:
         raise ValueError(f"Distrito no válido: {valor!r}. Distritos de la red: {', '.join(sorted(distritos))}")
     return texto

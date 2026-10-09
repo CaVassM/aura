@@ -11,6 +11,7 @@ Diferencias deliberadas con las herramientas del motor (`aura.herramientas`):
 """
 
 import json
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -57,8 +58,20 @@ class ProponerArgs(BaseModel):
     canales_aceptables: list[str] = Field(
         min_length=1, description="Lista con uno o más de: digital (videollamada), phone (teléfono), in_person (presencial)"
     )
-    distrito: str = Field(default="", description="Solo si la persona lo dijo y no estaba ya en los datos conocidos; si no, déjalo vacío")
-    grupo: str = Field(default="", description="diurno o nocturno; solo si la persona lo dijo, si no déjalo vacío")
+    distrito: str = Field(
+        default="",
+        description=(
+            "Solo si la persona dijo que irá a otro distrito distinto al de su perfil. Uno de: DIST_GAIA, "
+            "DIST_NEBULA, DIST_VECTOR, DIST_HORIZON, DIST_QUANTUM. Si no, déjalo vacío"
+        ),
+    )
+    grupo: str = Field(
+        default="",
+        description=(
+            "diurno o nocturno: el turno en que ESTUDIA la persona. Solo si ella lo dijo (p. ej. «estudio de noche»); "
+            "si no lo dijo, déjalo vacío y no se lo preguntes"
+        ),
+    )
     k: int = Field(default=3, ge=1, le=5, description="Cuántas opciones buscar")
 
 
@@ -72,6 +85,28 @@ class CancelarArgs(BaseModel):
 
 class SinArgs(BaseModel):
     pass
+
+
+def _grupo(valor: str) -> str | None:
+    """Normaliza lo que el modelo captura del turno de estudio; None si no es reconocible."""
+    v = valor.strip().lower()
+    if v in {"nocturno", "noche", "night", "evening", "vespertino", "nocturna"}:
+        return "nocturno"
+    if v in {"diurno", "dia", "día", "day", "mañana", "diurna"}:
+        return "diurno"
+    return None
+
+
+def _distrito_codigo(valor: str) -> str:
+    """«Nébula», «nebula» o «DIST_NEBULA» → `DIST_NEBULA` (el motor valida que exista)."""
+    base = unicodedata.normalize("NFD", valor.strip().lower())
+    texto = "".join(c for c in base if unicodedata.category(c) != "Mn").upper().replace(" ", "_")
+    return texto if texto.startswith("DIST_") else f"DIST_{texto}"
+
+
+def _grupo_por_horas(franjas: list[dict]) -> str:
+    """Sin dato explícito: si todo lo que puede es de 18:00 en adelante, se asume turno nocturno."""
+    return "nocturno" if franjas and all(f["desde"].strip()[:2].isdigit() and int(f["desde"].strip()[:2]) >= 18 for f in franjas) else "diurno"
 
 
 def _json(datos) -> str:
@@ -130,21 +165,26 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             }
             registrar("proponer_opciones", False, resultado)
             return _json(resultado)
-        distrito = distrito or sesion.contexto.distrito
+        distrito = _distrito_codigo(distrito) if distrito.strip() else sesion.contexto.distrito
         if not distrito:
             return _json({"ok": False, "error": "falta_distrito", "detalle": "Pregunta en qué distrito está la persona."})
+        franjas = [f.model_dump() if isinstance(f, BaseModel) else f for f in franjas]
+        capturado = _grupo(grupo)  # lo que la persona dijo de su turno: se guarda para la sesión
         solicitud = {
             "estudiante_id": sesion.estudiante_id,
             "motivo": motivo,
             "distrito": distrito,
-            "grupo": grupo or sesion.contexto.grupo or "diurno",
-            "franjas": [f.model_dump() if isinstance(f, BaseModel) else f for f in franjas],
+            "grupo": capturado or sesion.contexto.grupo or _grupo_por_horas(franjas),
+            "franjas": franjas,
             "canales_aceptables": canales_aceptables,
         }
         resultado = puerto.proponer(solicitud, k)
         if resultado.get("motivo_vacio") == "solicitud_invalida":
             registrar("proponer_opciones", False, resultado)
             return _json({"ok": False, "error": "solicitud_invalida", "detalle": resultado.get("detalle", "")})
+        if capturado:
+            sesion.contexto.grupo = capturado
+        sesion.contexto.distrito = distrito  # si cambió de distrito, queda para el resto de la conversación
         sesion.ultima_solicitud = solicitud
         sesion.servicio_ideal = resultado.get("servicio_ideal")
         sesion.desencuentro_registrado = False

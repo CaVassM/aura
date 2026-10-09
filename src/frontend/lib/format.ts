@@ -92,3 +92,32 @@ export function distritoLabel(id: string): string {
   const base = id.replace(/^DIST_/, "").toLowerCase();
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
+
+const DIAS_LARGO = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+/** Día de la semana de una fecha AAAA-MM-DD ("miércoles"), sin depender de la zona horaria. */
+export function diaSemana(iso: string): string {
+  const { anio, mes, dia } = partes(iso);
+  return DIAS_LARGO[new Date(Date.UTC(anio, mes - 1, dia)).getUTCDay()];
+}
+
+/** "miércoles 25 de noviembre" */
+export function fechaConDia(iso: string): string {
+  return `${diaSemana(iso)} ${fechaLarga(iso)}`;
+}
+
+/** Piezas para un bloque de calendario: { dia: "mié", numero: 25, mes: "nov" } */
+export function bloqueFecha(iso: string): { dia: string; numero: number; mes: string } {
+  const { mes, dia } = partes(iso);
+  return { dia: diaSemana(iso).slice(0, 3), numero: dia, mes: MESES[mes - 1].slice(0, 3) };
+}
+
+/** "10:00 – 11:00" */
+export function rangoHoras(desde: string, hasta: string): string {
+  return `${desde} – ${hasta}`;
+}
+
+/** "miércoles 25 de noviembre" → "Miércoles 25 de noviembre" (solo la primera letra). */
+export function primeraMayuscula(texto: string): string {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}

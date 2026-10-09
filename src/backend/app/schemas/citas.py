@@ -75,7 +75,10 @@ class CitaOut(BaseModel):
     estudiante_id: str
     service_id: str
     servicio_nombre: str
+    tipo: str
     tipo_label: str
+    distrito: str
+    hora_fin: str
     slot: SlotOut
     canal: str
     estado: str
@@ -96,7 +99,10 @@ def cita_out(cita) -> CitaOut:
         estudiante_id=cita.estudiante_id,
         service_id=cita.service_id,
         servicio_nombre=cita.servicio_nombre,
+        tipo=cita.tipo,
         tipo_label=cita.tipo_label,
+        distrito=cita.distrito,
+        hora_fin=cita.hora_fin,
         slot=SlotOut(
             id=cita.cupo_id,
             service_id=cita.service_id,

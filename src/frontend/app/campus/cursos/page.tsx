@@ -1,7 +1,7 @@
 import { BookOpen } from "lucide-react";
 import PortalShell from "@/components/PortalShell";
 import TopbarControls from "@/components/campus/TopbarControls";
-import { campusBrand, campusNav, campusUser } from "@/components/campus/nav";
+import { campusBrand, campusNav } from "@/components/campus/nav";
 import Placeholder from "@/components/ui/Placeholder";
 
 export default function CursosPage() {
@@ -13,7 +13,6 @@ export default function CursosPage() {
       brandSubtitle={campusBrand.subtitle}
       nav={campusNav}
       activeHref="/campus/cursos"
-      user={campusUser}
       exitHref="/"
       exitLabel="Salir del campus"
       title="Mis cursos"

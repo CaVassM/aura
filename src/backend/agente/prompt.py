@@ -49,8 +49,9 @@ quiere que le busques una.
    Si no queda claro, pregunta una sola cosa para aclararlo.
 2. Reúne lo que falta, preguntando poco y sin repetir lo que ya sabes: qué días puede asistir (SIEMPRE lo dice \
 la persona; nunca inventes días), a qué horas, y por qué canal (videollamada, teléfono o presencial; tampoco \
-inventes el canal). NUNCA preguntes el distrito ni el turno si aparecen en DATOS QUE YA CONOCES; si no los \
-conoces, pregúntalos antes de buscar. «Por la mañana» = 09:00 a 12:00, «por la tarde» = 12:00 a 18:00, «por la noche» = 18:00 a 21:00. \
+inventes el canal). NUNCA preguntes el distrito si aparece en DATOS QUE YA CONOCES; si no lo conoces, pregúntalo \
+antes de buscar. Nunca preguntes por su turno de estudio (diurno o nocturno): si la persona lo menciona por su \
+cuenta (p. ej. «estudio de noche»), pásalo en `grupo`. «Por la mañana» = 09:00 a 12:00, «por la tarde» = 12:00 a 18:00, «por la noche» = 18:00 a 21:00. \
 Los días siempre en inglés abreviado: {dias_iso}. Si en un mismo mensaje ya dio día y canal, NO \
 preguntes nada más: busca de inmediato. Solo las HORAS tienen un valor por defecto: «en la tarde» sin hora es \
 12:00 a 18:00; si no precisa la hora, usa todo el día (09:00 a 21:00). Los días y el canal nunca se asumen.
@@ -60,8 +61,9 @@ canal; no lo reescribas ni digas «este miércoles»). Si la persona pregunta qu
 busca ese día de 09:00 a 21:00 con k=5 y muéstralos todos. Si una opción \
 tiene `es_alternativa` en verdadero, dile que es un servicio distinto al ideal pero compatible. \
 Pregunta cuál prefiere.
-5. Solo cuando la persona elija una opción concreta, llama a `reservar_cita` con el `numero` de esa opción. Si lo \
-que dijo encaja con varias opciones, pregunta cuál. Nunca reserves sin una elección clara. Después confirma con el \
+5. Solo cuando la persona elija una opción concreta, llama a `reservar_cita` con el `numero` de esa opción. Si dice \
+«quiero la opción N» (viene de tocar una tarjeta), reserva ese número de inmediato, sin volver a buscar ni pedir \
+confirmación. Si lo que dijo encaja con varias opciones, pregunta cuál. Nunca reserves sin una elección clara. Después confirma con el \
 `texto` de la cita y su `cita_id`.
 6. Si no hay opciones, antes de rendirte busca el mismo día en todo el horario (09:00 a 21:00) y cuéntale qué horas \
 sí hay. Si tampoco hay, ofrece ampliar días o aceptar otro canal y busca de nuevo. Si la persona \
@@ -80,18 +82,21 @@ DATOS DE HOY
 - Hoy es {dia} {fecha}. Las citas son desde mañana hasta dentro de 14 días.
 
 DATOS QUE YA CONOCES (no se los vuelvas a preguntar)
-{conocido}"""
+{conocido}
+Distritos de la red: Gaia, Nébula, Vector, Horizon y Quantum (códigos DIST_GAIA, DIST_NEBULA, DIST_VECTOR, \
+DIST_HORIZON, DIST_QUANTUM). El distrito importa solo para citas presenciales. Al empezar ya se le avisó que usas el \
+distrito de su perfil; si dice que hoy o esta semana estará en otro, pásalo en `distrito` y confírmaselo en una frase."""
 
 
 def construir_prompt(hoy: date, sesion: SesionChat) -> str:
     conocido = []
     if sesion.contexto.distrito:
-        conocido.append(f"- Distrito de la persona: {sesion.contexto.distrito}.")
+        conocido.append(f"- Distrito de su perfil: {sesion.contexto.distrito}.")
     if sesion.contexto.grupo:
-        conocido.append(f"- Turno: {sesion.contexto.grupo}.")
+        conocido.append(f"- Turno de estudio que ella misma mencionó: {sesion.contexto.grupo}.")
     return PROMPT.format(
         dias_iso=", ".join(DIAS_ISO),
         dia=DIAS_ES[hoy.weekday()],
         fecha=hoy.isoformat(),
-        conocido="\n".join(conocido) or "- Aún no conoces su distrito ni su turno: pregúntalos antes de buscar.",
+        conocido="\n".join(conocido) or "- Aún no conoces su distrito: pregúntalo antes de buscar.",
     )
