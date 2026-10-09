@@ -159,3 +159,19 @@ def test_proponer_no_repite_el_mismo_servicio_a_la_misma_hora(client_fresco, est
     opciones = client_fresco.post("/api/appointments/proposals?k=20", json=solicitud).json()["opciones"]
     claves = [(o["service_id"], o["fecha"], o["hora_inicio"], o["canal"]) for o in opciones]
     assert opciones and len(claves) == len(set(claves))
+
+
+def test_proponer_con_fecha_solo_trae_ese_dia(estado_fresco):
+    base = {
+        "estudiante_id": "E_FECHA",
+        "motivo": "academic_pressure",
+        "distrito": "DIST_NEBULA",
+        "franjas": [{"dia": "Wed", "desde": "09:00", "hasta": "21:00"}],
+        "canales_aceptables": ["digital", "phone", "in_person"],
+    }
+    sin = estado_fresco.motor.proponer_opciones(base, 20)["opciones"]
+    assert {o["fecha"] for o in sin} >= {"2026-11-25"}
+    con = estado_fresco.motor.proponer_opciones({**base, "fecha": "2026-11-25"}, 5)["opciones"]
+    assert con and {o["fecha"] for o in con} == {"2026-11-25"}
+    mala = estado_fresco.motor.proponer_opciones({**base, "fecha": "25/11"}, 5)
+    assert mala["motivo_vacio"] == "solicitud_invalida"

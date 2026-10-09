@@ -100,3 +100,13 @@ def test_menciona_asistencia(texto):
 ])
 def test_no_menciona_asistencia(texto):
     assert not entrada.menciona_asistencia(texto)
+
+
+@pytest.mark.parametrize("texto", ["para el 18 de noviembre", "el 18", "18 de noviembre", "dia 25", "el 3 de diciembre"])
+def test_una_fecha_cuenta_como_dia_dicho(texto):
+    assert dijo_dias([texto])
+
+
+@pytest.mark.parametrize("texto", ["Quiero la opción 3 a las 14:00", "tengo 2 exámenes"])
+def test_un_numero_suelto_no_es_dia(texto):
+    assert not dijo_dias([texto])

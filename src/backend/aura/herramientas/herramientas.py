@@ -46,6 +46,8 @@ class HerramientasAgente:
         try:
             modelo, tipo_ideal = self.convertir_solicitud(solicitud)
             k = min(max(1, int(k)), K_MAXIMO)
+            pedido = validacion.como_diccionario(solicitud, "solicitud")
+            fecha = date.fromisoformat(str(pedido["fecha"])) if pedido.get("fecha") else None
         except (KeyError, ValueError, TypeError) as error:
             return {
                 "opciones": [],
@@ -54,10 +56,13 @@ class HerramientasAgente:
             }
         # Un servicio puede tener varios cupos a la misma hora: para la persona son la misma opción. Se buscan
         # de más y se muestra una sola por (servicio, fecha, hora, canal); al reservar se toma el cupo que quede.
-        candidatas = self._mejores(modelo, k * 10, excluir=frozenset(excluir_servicios or ()))
+        # `fecha` (opcional) limita las opciones a ese día concreto; las franjas siguen mandando el día de la semana.
+        candidatas = self._mejores(modelo, k * 10 if fecha is None else 2000, excluir=frozenset(excluir_servicios or ()))
         mejores, vistas = [], set()
         for op in candidatas:
             cupo = self.agenda.cupo_por_id[op.cupo_id]
+            if fecha is not None and cupo.fecha != fecha:
+                continue
             clave = (cupo.service_id, cupo.fecha, cupo.hora_inicio, op.canal)
             if clave in vistas:
                 continue

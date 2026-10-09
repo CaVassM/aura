@@ -57,7 +57,11 @@ cuenta (p. ej. «estudio de noche»), pásalo en `grupo`. «Por la mañana» = 0
 Los días siempre en inglés abreviado: {dias_iso}. Si en un mismo mensaje ya dio día y canal, NO \
 preguntes nada más: busca de inmediato. Solo las HORAS tienen un valor por defecto: «en la tarde» sin hora es \
 12:00 a 18:00; si no precisa la hora, usa todo el día (09:00 a 21:00). Los días y el canal nunca se asumen.
-3. Con motivo, días/horas y canal, llama a `proponer_opciones`. No pidas permiso para buscar.
+3. Con motivo, días/horas y canal, llama a `proponer_opciones`. No pidas permiso para buscar. Si la persona pide una \
+fecha concreta («el 18 de noviembre», «el 25»), pásala en `fecha` (AAAA-MM-DD, del año de DATOS DE HOY); si dice solo el día de \
+la semana, no uses `fecha`. «Cualquier servicio» o «cualquier canal» es válido: busca con el motivo ya conocido y todos los canales \
+(digital, phone, in_person), sin volver a preguntar. Haz UNA búsqueda por mensaje y respóndele con el resultado; no repitas \
+la misma búsqueda. Di siempre la fecha completa (día y número), nunca solo «este miércoles».
 4. Presenta las opciones numeradas usando tal cual el `texto` de cada una (ya trae servicio, día, fecha, hora y \
 canal; no lo reescribas ni digas «este miércoles»). Si la persona pregunta qué horarios o fechas hay para un día, \
 busca ese día de 09:00 a 21:00 con k=5 y muéstralos todos. Si una opción \

@@ -75,6 +75,11 @@ def _respaldo(eventos: list[EventoHerramienta]) -> str:
             return f"Listo, cancelé la cita {e.resultado['cita']['id']}."
         if e.nombre == "registrar_desencuentro" and e.ok:
             return "Avisé al equipo de coordinación que no había una opción para ti, para que amplíen la oferta."
+        if e.nombre == "proponer_opciones" and e.ok:
+            if e.resultado.get("opciones"):
+                return "Estas son las opciones que encontré. Toca la que prefieras o escríbeme cuál."
+            if e.resultado.get("motivo_vacio") == "sin_cupos_compatibles":
+                return "No encontré cupos con esas preferencias. ¿Quieres ampliar los días u horarios, o aceptar otro canal?"
     return SIN_RESPUESTA
 
 
@@ -109,9 +114,10 @@ class AgenteAura:
             )
         except Exception as error:  # noqa: BLE001 — se clasifica abajo
             if type(error).__name__ == "GraphRecursionError":
-                sesion.mensajes = entrada + [AIMessage(SIN_RESPUESTA)]
+                texto = _respaldo(ctx.eventos)  # si ya hizo algo útil en el turno, se dice; si no, pide reformular
+                sesion.mensajes = entrada + [AIMessage(texto)]
                 sesion.tocar()
-                return ResultadoTurno(SIN_RESPUESTA, ctx.eventos)
+                return ResultadoTurno(texto, ctx.eventos)
             raise _clasificar(error, self.config) from error
 
         sesion.mensajes = list(salida["messages"])

@@ -39,6 +39,7 @@ class ContextoTurno:
     puerto: PuertoAgenda
     mensaje: str = ""  # el mensaje que se está respondiendo (aún no está en sesion.mensajes)
     eventos: list[EventoHerramienta] = field(default_factory=list)
+    busquedas: set = field(default_factory=set)  # búsquedas ya hechas en este turno (frena los bucles)
 
 
 class FranjaArgs(BaseModel):
@@ -70,6 +71,13 @@ class ProponerArgs(BaseModel):
         description=(
             "diurno o nocturno: el turno en que ESTUDIA la persona. Solo si ella lo dijo (p. ej. «estudio de noche»); "
             "si no lo dijo, déjalo vacío y no se lo preguntes"
+        ),
+    )
+    fecha: str = Field(
+        default="",
+        description=(
+            "AAAA-MM-DD. Solo si la persona pidió una FECHA concreta (p. ej. «el 18 de noviembre»). Si dijo solo el día de la "
+            "semana («el miércoles»), déjalo vacío. Con fecha, solo se buscan cupos de ese día"
         ),
     )
     k: int = Field(default=3, ge=1, le=5, description="Cuántas opciones buscar")
@@ -157,6 +165,7 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
         canales_aceptables: list[str],
         distrito: str = "",
         grupo: str = "",
+        fecha: str = "",
         k: int = 3,
     ) -> str:
         textos = [m.content for m in sesion.mensajes if m.type == "human" and isinstance(m.content, str)]
@@ -173,6 +182,27 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
         if not distrito:
             return _json({"ok": False, "error": "falta_distrito", "detalle": "Pregunta en qué distrito está la persona."})
         franjas = [f.model_dump() if isinstance(f, BaseModel) else f for f in franjas]
+        fecha = fecha.strip()
+        if fecha:
+            try:
+                dia_fecha = date.fromisoformat(fecha)
+            except ValueError:
+                resultado = {"ok": False, "error": "fecha_invalida", "detalle": "`fecha` debe ser AAAA-MM-DD, p. ej. 2026-11-18."}
+                registrar("proponer_opciones", False, resultado)
+                return _json(resultado)
+            # La fecha manda sobre el día de la semana que pusiera el modelo; las horas se respetan.
+            nombre_dia = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[dia_fecha.weekday()]
+            franjas = [{**f, "dia": nombre_dia} for f in franjas]
+        firma = _json([motivo, distrito, franjas, sorted(canales_aceptables), fecha, k])
+        if firma in ctx.busquedas:
+            resultado = {
+                "ok": False,
+                "error": "busqueda_repetida",
+                "detalle": "Ya hiciste exactamente esta búsqueda en este mensaje. No la repitas: respóndele a la persona con lo que ya obtuviste.",
+            }
+            registrar("proponer_opciones", False, resultado)
+            return _json(resultado)
+        ctx.busquedas.add(firma)
         capturado = _grupo(grupo)  # lo que la persona dijo de su turno: se guarda para la sesión
         solicitud = {
             "estudiante_id": sesion.estudiante_id,
@@ -182,7 +212,18 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             "franjas": franjas,
             "canales_aceptables": canales_aceptables,
         }
+        if fecha:
+            solicitud["fecha"] = fecha
         resultado = puerto.proponer(solicitud, k)
+        aviso_fecha = ""
+        if fecha and not resultado.get("opciones") and resultado.get("motivo_vacio") != "servicios_en_lote":
+            # Nada ese día: se buscan las fechas más cercanas con las mismas preferencias y se dice claro.
+            resultado = puerto.proponer({k_: v for k_, v in solicitud.items() if k_ != "fecha"}, k)
+            if resultado.get("opciones"):
+                aviso_fecha = (
+                    f"No hay cupos el {_fecha_texto(fecha)} con esas preferencias. Díselo con claridad y presenta estas, "
+                    "que son las fechas más cercanas; no digas que son de ese día."
+                )
         sesion.lote_disponible = False
         if resultado.get("motivo_vacio") == "servicios_en_lote":
             # Los servicios compatibles están en modo lote: no hay opciones para elegir; se ofrece el lote.
@@ -235,7 +276,8 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
         return _json(
             {
                 "opciones": [_opcion_para_modelo(i, o) for i, o in enumerate(resultado["opciones"], 1)],
-                "indicacion": "Muestra cada opción con su `texto`, numeradas, y pregunta cuál prefiere.",
+                "indicacion": aviso_fecha
+                or "Muestra cada opción con su `texto`, numeradas, y pregunta cuál prefiere. Di siempre la fecha completa de cada una.",
             }
         )
 

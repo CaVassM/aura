@@ -519,3 +519,64 @@ def test_consultar_asistencia_sin_datos_simulados_responde_error(montar):
     cliente, _ = montar(guion)
     r = cliente.post("/api/chat", json={"mensaje": "¿Cómo va mi asistencia?", "estudiante_id": "STU_AE_000001"}).json()
     assert r["respuesta"] == "sin_datos_academicos"
+
+
+def test_proponer_con_fecha_filtra_ese_dia_y_avisa_si_no_hay(montar, estado_fresco):
+    capturado = []
+
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        if r is None:
+            return llamada("proponer_opciones", **{**PARAMS_PROPONER, "canales_aceptables": ["digital", "phone", "in_person"], "fecha": "2026-11-25"})
+        capturado.append(r)
+        return AIMessage("ok")
+
+    cliente, _ = montar(guion)
+    r = cliente.post("/api/chat", json={"mensaje": "Puedo el miércoles 25 de noviembre, por videollamada", "estudiante_id": "E1"}).json()
+    assert r["opciones"] and {o["fecha"] for o in r["opciones"]} == {"2026-11-25"}
+
+    # Una fecha sin cupos (domingo): se buscan las más cercanas y la indicación lo dice con claridad
+    capturado.clear()
+
+    def guion2(mensajes):
+        r = ultimo_resultado(mensajes)
+        if r is None:
+            return llamada("proponer_opciones", **{**PARAMS_PROPONER, "canales_aceptables": ["digital"], "fecha": "2026-11-22"})
+        capturado.append(r)
+        return AIMessage("ok")
+
+    cliente2, _ = montar(guion2)
+    r2 = cliente2.post("/api/chat", json={"mensaje": "Puedo el domingo 22, por videollamada", "estudiante_id": "E2"}).json()
+    assert r2["opciones"] == [] and capturado[0].get("motivo_vacio") == "sin_cupos_compatibles"
+
+
+def test_busqueda_repetida_en_un_mensaje_se_frena(montar):
+    resultados = []
+
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        if r is not None:
+            resultados.append(r)
+        if len(resultados) >= 2:
+            return AIMessage("Aquí tienes lo que encontré.")
+        return llamada("proponer_opciones", **PARAMS_PROPONER)
+
+    cliente, _ = montar(guion)
+    r = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()
+    assert resultados[1]["error"] == "busqueda_repetida"
+    assert r["respuesta"] == "Aquí tienes lo que encontré." and r["opciones"]
+
+
+def test_si_el_modelo_se_enreda_se_responde_con_lo_que_ya_se_busco(settings, estado_fresco):
+    """Al agotar los pasos del turno, si ya había opciones no se pide «cuéntamelo de nuevo»."""
+    from agente.config import ConfigAgente
+
+    def guion(mensajes):
+        n = sum(1 for m in mensajes if isinstance(m, ToolMessage))
+        return llamada("proponer_opciones", **{**PARAMS_PROPONER, "k": 1 + n % 5})  # siempre busca algo distinto
+
+    modelo = ModeloGuionado(guion=guion)
+    cliente = TestClient(create_app(settings, estado_fresco, agente=AgenteAura(ConfigAgente(max_pasos=3), modelo=modelo)))
+    with cliente:
+        r = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()
+    assert r["respuesta"].startswith("Estas son las opciones") and r["opciones"]

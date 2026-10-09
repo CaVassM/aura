@@ -20,6 +20,8 @@ _DIAS = re.compile(_colapsar(
     r"(esta|la proxima|la otra|proxima) semana|dias? de semana|dia(s)? que (sea|haya|quieras)|"
     r"(da|me da) igual (el|los) dias?|no importa (el|los) dias?|sin preferencia)\b"
     r"|(?<!la )(?<!las )(?<!de la )\bmanana\b"
+    r"|\b(el |para el |del )?\d{1,2} de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b"
+    r"|\b(para |dia |el )\d{1,2}\b(?!:)"
 ))
 _CANALES = re.compile(_colapsar(
     r"\b(videollamada|video|virtual|online|en linea|zoom|meet|teams|digital|remot[oa]|"

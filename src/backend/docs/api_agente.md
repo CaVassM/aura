@@ -96,7 +96,7 @@ El modelo las llama solo; no son endpoints. Están en `agente/herramientas.py` y
 
 | Herramienta | Parámetros que elige el modelo | Qué hace |
 |---|---|---|
-| `proponer_opciones` | `motivo`, `franjas` [{`dia` Mon–Sun, `desde`, `hasta` HH:MM}], `canales_aceptables` (`digital`, `phone`, `in_person`), `distrito`\*, `grupo`\*, `k` (1–5) | Busca hasta `k` citas compatibles. No reserva |
+| `proponer_opciones` | `motivo`, `franjas` [{`dia` Mon–Sun, `desde`, `hasta` HH:MM}], `canales_aceptables` (`digital`, `phone`, `in_person`), `distrito`\*, `grupo`\*, `fecha` (AAAA-MM-DD, solo si la persona pidió una fecha concreta), `k` (1–5) | Busca hasta `k` citas compatibles, una por servicio/fecha/hora/canal. Con `fecha` solo trae ese día; si no hay cupos ese día, trae las fechas más cercanas y le indica al modelo que lo diga. No reserva. Repetir la misma búsqueda en un mensaje devuelve `busqueda_repetida` |
 | `reservar_cita` | `numero` (1, 2, 3… de la última lista) | Reserva esa opción. El modelo nunca ve ni copia identificadores internos |
 | `cancelar_cita` | `cita_id` | Cancela una cita **de esa persona** |
 | `listar_mis_citas` | — | Lista las citas de la persona |
