@@ -59,13 +59,13 @@ class PuertoPlataforma:
 
     def reservar(self, estudiante_id: str, opcion_id: str, servicio_ideal: str | None) -> dict:
         try:
-            return {"ok": True, "cita": self._cita(self._citas.reservar(estudiante_id, opcion_id, servicio_ideal))}
+            return {"ok": True, "cita": self._cita(self._citas.reservar(estudiante_id, opcion_id, servicio_ideal, origen="chat"))}
         except (SlotTakenError, InvalidRequestError) as error:
             return self._error(error)
 
     def cancelar(self, cita_id: str, estudiante_id: str) -> dict:
         try:
-            return {"ok": True, "cita": self._cita(self._citas.cancelar(cita_id, estudiante_id))}
+            return {"ok": True, "cita": self._cita(self._citas.cancelar(cita_id, estudiante_id, origen="chat"))}
         except NotFoundError as error:
             return {"ok": False, "error": "cita_no_encontrada", "detalle": error.detalle}
 
@@ -73,8 +73,7 @@ class PuertoPlataforma:
         return [self._cita(c) for c in self._citas.listar(estudiante_id)]
 
     def registrar_desencuentro(self, solicitud: dict) -> dict:
-        with self._estado.lock:
-            return self._estado.motor.registrar_desencuentro(solicitud)
+        return self._citas.registrar_desencuentro(solicitud, origen="chat")
 
 
 class ChatService:

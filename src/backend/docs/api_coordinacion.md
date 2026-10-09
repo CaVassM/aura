@@ -59,6 +59,8 @@ el tamaño real se indica en cada caso). Prefijo común: `/api`. Esquemas comple
 | GET | `/api/coordinacion/servicios/{service_id}?semana=` | Detalle de un servicio |
 | GET | `/api/coordinacion/desencuentros?motivo=&distrito=&servicio_ideal=&grupo=&pagina=&tamano=` | Tabla, matriz distrito × servicio, franja principal e insight |
 | GET | `/api/coordinacion/desencuentros.csv` | Los mismos filtros, sin paginar |
+| GET | `/api/coordinacion/actividad?desde=&limite=` | Registro de lo **nuevo** (citas reservadas o canceladas y desencuentros hechos después de arrancar la demo) |
+| GET | `/api/coordinacion/actividad/stream?desde=` | Lo mismo en **tiempo real** (Server-Sent Events) |
 | GET | `/api/coordinacion/reglas` | Reglas del motor en solo lectura |
 
 ## GET /api/demo/estado
@@ -722,3 +724,34 @@ Un segundo intento sobre la misma opción responde 409 `{   "error": "cupo_ya_to
 - Los textos de los ⓘ viven en `lib/glosario.ts` y se rellenan con `/api/demo/estado`; el embudo de cupos usa los 4 campos por servicio.
 - Reinicio: botón «Reiniciar demo» → `POST /api/demo/reiniciar` y recargar.
 - Los endpoints del estudiante pasaron a snake_case.
+
+
+## Actividad en vivo
+
+Para mostrar en pantalla, al mismo tiempo, lo que hace un estudiante y lo que ve Coordinación. **Solo registra lo nuevo**: lo que llega por la API de citas o por el chat después de arrancar. Las citas y desencuentros sembrados de la demo no aparecen. Todo vive en RAM: reiniciar el backend o la demo vacía el registro.
+
+`GET /api/coordinacion/actividad?desde=0&limite=200` → `{ "epoca", "ultimo_id", "eventos": [...] }`, del más antiguo al más reciente. `desde` devuelve solo los eventos con id mayor.
+
+Cada evento:
+
+| Campo | Descripción |
+|---|---|
+| `id` | Entero creciente; sirve como cursor |
+| `tipo` | `cita_reservada`, `cita_cancelada` o `desencuentro` |
+| `registrado_en` | Instante real del registro (ISO, UTC) |
+| `fecha_solicitud` | Fecha **simulada** de la demo en que ocurrió (`hoy`) |
+| `origen` | `chat` (agente AURA) o `api` |
+| `estudiante_id` | Quién |
+| `servicio` | `{service_id, nombre, tipo, tipo_label, distrito}` (null en desencuentros) |
+| `ocupacion` | `{pct, antes_pct, reservados, liberados, nivel}` del servicio **tras** el evento: cupos reservados / liberados de la agenda abierta (null en desencuentros) |
+| `cita` | `{cita_id, fecha, hora_inicio, hora_fin, canal, canal_label, dias_espera, es_alternativa}` (null en desencuentros) |
+| `desencuentro` | `{registro_id, motivo, motivo_label, servicio_ideal, servicio_ideal_label, distrito, grupo, grupo_label, franjas, canales}` (solo desencuentros) |
+
+`GET /api/coordinacion/actividad/stream?desde=<ultimo_id>` es un `text/event-stream`:
+
+- `event: inicio` al conectar: `{epoca, ultimo_id, reinicio}` (`reinicio: true` si el cliente venía de otra ejecución: debe vaciar su lista).
+- `event: actividad` (con `id:`) por cada evento nuevo, con el JSON de arriba.
+- `event: reinicio` si se reinicia la demo con el flujo abierto.
+- Un comentario `: ping` cada 15 s para mantener la conexión.
+
+`EventSource` reconecta solo y reenvía `Last-Event-ID`; el servidor no repite lo ya entregado. El frontend (`components/coordinacion/ActividadProvider.tsx`) carga primero `GET /actividad` y luego abre el flujo con `desde=ultimo_id`.

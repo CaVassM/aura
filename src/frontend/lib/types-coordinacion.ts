@@ -259,3 +259,61 @@ export interface Reglas {
     terminos: { id: string; nombre: string; peso: number }[];
   };
 }
+
+// --- Actividad en vivo (GET /api/coordinacion/actividad y su flujo /stream) ---
+
+export type TipoEvento = "cita_reservada" | "cita_cancelada" | "desencuentro";
+
+export interface EventoActividad {
+  id: number;
+  tipo: TipoEvento;
+  /** Instante real del registro (ISO, UTC). */
+  registrado_en: string;
+  /** Fecha simulada de la demo en que ocurrió (`hoy`). */
+  fecha_solicitud: string;
+  origen: "chat" | "api";
+  estudiante_id: string;
+  servicio: {
+    service_id: string;
+    nombre: string;
+    tipo: string;
+    tipo_label: string;
+    distrito: string;
+  } | null;
+  /** Ocupación del servicio tras el evento (reservados / liberados de la agenda abierta). */
+  ocupacion: {
+    pct: number;
+    antes_pct: number;
+    reservados: number;
+    liberados: number;
+    nivel: Nivel;
+  } | null;
+  cita: {
+    cita_id: string;
+    fecha: string;
+    hora_inicio: string;
+    hora_fin: string;
+    canal: string;
+    canal_label: string;
+    dias_espera: number | null;
+    es_alternativa: boolean;
+  } | null;
+  desencuentro: {
+    registro_id: string;
+    motivo: string;
+    motivo_label: string;
+    servicio_ideal: string;
+    servicio_ideal_label: string;
+    distrito: string;
+    grupo: string;
+    grupo_label: string;
+    franjas: string;
+    canales: string[];
+  } | null;
+}
+
+export interface ActividadRespuesta {
+  epoca: string;
+  ultimo_id: number;
+  eventos: EventoActividad[];
+}

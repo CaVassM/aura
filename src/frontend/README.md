@@ -55,7 +55,7 @@ app/
 │   ├── chat/page.tsx              Conversar con AURA (agente real)
 │   ├── citas/page.tsx             Mis citas (del backend; se pueden cancelar)
 │   └── cursos|calificaciones|calendario/   placeholders
-└── coordinacion/                 panel de la red (usa el backend)
+└── coordinacion/                 panel de la red (usa el backend); en-vivo/ = citas nuevas en tiempo real (SSE)
 
 components/
 ├── PortalShell.tsx        marco del campus (barra teal, mismo estilo que Coordinación)
@@ -86,6 +86,16 @@ superior cambia de estudiante de verdad: cada uno tiene su chat y sus citas en e
 | — | — | El turno diurno/nocturno **no** es parte del perfil: el agente lo toma de lo que la persona cuente |
 
 Para agregar un perfil basta añadir un objeto a `PERFILES`.
+
+### En vivo (para el video con dos pantallas)
+
+`/coordinacion/en-vivo` muestra, al instante y sin recargar, cada cita que un estudiante reserva o cancela
+y cada solicitud sin cupo que registra el agente. Además aparece un aviso emergente en cualquier pantalla
+de Coordinación, la insignia de «En vivo» en la barra lateral cuenta lo no visto y los números del panel
+(citas agendadas, ocupación) se actualizan solos. Solo registra lo **nuevo**: las citas sembradas no
+aparecen. Detalle del contrato: `src/backend/docs/api_coordinacion.md` (sección «Actividad en vivo»).
+
+Para grabarlo: `/campus/chat` en una ventana (como cualquier perfil del selector) y `/coordinacion` en otra.
 
 ### Cómo se ve el chat
 

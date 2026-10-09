@@ -7,6 +7,7 @@ from agente.config import ConfigAgente
 from fastapi import Depends, Request
 
 from .repositories.app_state import AppState
+from .services.actividad_service import ActividadService
 from .services.catalogo_service import CatalogoService
 from .services.chat_service import ChatService
 from .services.citas_service import CitasService
@@ -82,3 +83,7 @@ def get_chat(estado: AppState = Depends(get_estado), agente=Depends(get_agente))
 def get_chat_sesiones(estado: AppState = Depends(get_estado)) -> ChatService:
     """Para historial y reinicio: no necesita (ni crea) el agente."""
     return ChatService(estado, None)
+
+
+def get_actividad(estado: AppState = Depends(get_estado)) -> ActividadService:
+    return ActividadService(estado)

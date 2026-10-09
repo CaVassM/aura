@@ -411,3 +411,19 @@ def test_la_cita_trae_los_datos_que_necesita_el_frontend(montar):
         assert cita[campo]
     assert cita["slot"]["fecha_iso"].count("T") == 1
     assert cliente.get("/api/appointments", params={"estudiante_id": "E1"}).json()[0]["tipo"] == cita["tipo"]
+
+
+def test_lo_que_hace_el_chat_aparece_en_la_actividad_en_vivo(montar, estado_fresco):
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        humanos = [m for m in mensajes if m.type == "human"]
+        if r is not None:
+            return AIMessage("ok")
+        return llamada("proponer_opciones", **PARAMS_PROPONER) if len(humanos) == 1 else llamada("reservar_cita", numero=1)
+
+    cliente, _ = montar(guion)
+    sid = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E_VIVO"}).json()["session_id"]
+    assert cliente.get("/api/coordinacion/actividad").json()["eventos"] == []  # proponer no es un evento
+    cliente.post("/api/chat", json={"mensaje": "la primera", "estudiante_id": "E_VIVO", "session_id": sid})
+    [e] = cliente.get("/api/coordinacion/actividad").json()["eventos"]
+    assert e["tipo"] == "cita_reservada" and e["origen"] == "chat" and e["estudiante_id"] == "E_VIVO"

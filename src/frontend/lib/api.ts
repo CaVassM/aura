@@ -10,6 +10,7 @@
 
 import { ChatRespuesta, Cita, HistorialChat } from "./types";
 import {
+  ActividadRespuesta,
   DesencuentrosRespuesta,
   EstadoDemo,
   FiltrosDesencuentros,
@@ -123,6 +124,14 @@ export const urlDesencuentrosCsv = (filtros: FiltrosDesencuentros = {}) =>
   `${API_BASE_URL}/api/coordinacion/desencuentros.csv${consulta({ ...filtros })}`;
 
 export const getReglas = () => request<Reglas>("/api/coordinacion/reglas");
+
+/** Lo nuevo (citas y desencuentros hechos después de arrancar la demo), del más antiguo al más reciente. */
+export const getActividad = (desde = 0) =>
+  request<ActividadRespuesta>("/api/coordinacion/actividad", { desde });
+
+/** URL del flujo en tiempo real (SSE); `desde` es el último id que ya se tiene. */
+export const urlActividadStream = (desde = 0) =>
+  `${API_BASE_URL}/api/coordinacion/actividad/stream?desde=${desde}`;
 
 // ---------------------------------------------------------------------------
 // Estudiante: chat con el agente y citas

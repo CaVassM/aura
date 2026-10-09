@@ -87,10 +87,12 @@ export function pct(valor: number): string {
   return `${num(valor)}%`;
 }
 
+const DISTRITOS_CON_TILDE: Record<string, string> = { nebula: "Nébula" };
+
 /** "DIST_GAIA" → "Gaia" (el id viene de D6; solo se le da formato de lectura). */
 export function distritoLabel(id: string): string {
   const base = id.replace(/^DIST_/, "").toLowerCase();
-  return base.charAt(0).toUpperCase() + base.slice(1);
+  return DISTRITOS_CON_TILDE[base] ?? base.charAt(0).toUpperCase() + base.slice(1);
 }
 
 const DIAS_LARGO = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];

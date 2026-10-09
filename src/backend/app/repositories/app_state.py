@@ -12,6 +12,7 @@ from aura.herramientas.configuracion import cargar_yaml
 from aura.servicio import ServicioAsignacion
 
 from ..settings import Settings
+from .actividad_repository import ActividadRepository
 from .chat_repository import ChatRepository
 from .cita_repository import CitaRepository
 from .geo_d6 import cargar_geo_d6
@@ -28,6 +29,7 @@ class AppState:
     espera_linea_base_dias: float
     citas: CitaRepository = field(default_factory=CitaRepository)
     chats: ChatRepository = field(default_factory=ChatRepository)
+    actividad: ActividadRepository = field(default_factory=ActividadRepository)
     siembra: dict = field(default_factory=dict)
     lock: RLock = field(default_factory=RLock)
 
