@@ -17,6 +17,7 @@ src/backend/
 │   ├── models/                   #   entidades (Cita)
 │   └── cli_siembra.py            #   resumen por consola de la siembra
 │
+├── agente/                       # AGENTE CONVERSACIONAL — LangChain + Ollama (gemma4)
 ├── aura/                         # MOTOR DE ASIGNACIÓN — servicio independiente
 │   ├── servicio.py               #   ÚNICA puerta de entrada: ServicioAsignacion
 │   ├── motor/  herramientas/  aviso/  datos/
@@ -24,7 +25,7 @@ src/backend/
 ├── config/  data_pack/  docs/  experimentos/  salidas/  tests/
 ```
 
-Regla de dependencia: `app/` usa el motor solo a través de `aura.servicio.ServicioAsignacion` (y de los tipos de `aura.datos`); `aura/` no importa nada de `app/` ni de `experimentos/`. El futuro agente conversacional usará `ServicioAsignacion.esquemas_herramientas()` y `ejecutar_herramienta()` ([contrato](docs/contrato_herramientas.md)).
+Regla de dependencia: `app/` usa el motor solo a través de `aura.servicio.ServicioAsignacion` (y de los tipos de `aura.datos`); `aura/` no importa nada de `app/` ni de `experimentos/`. El agente conversacional (`agente/`, LangChain + Ollama) no importa `app/` ni `aura/`: usa el puerto `agente/puerto.py`, que implementa la plataforma ([API del agente](docs/api_agente.md)). Las herramientas del motor están en [contrato](docs/contrato_herramientas.md).
 
 ## Cómo funciona la demo
 
@@ -80,8 +81,15 @@ El Data Pack no se copia al repo salvo D1, D2, D6 y D7 en `data_pack/`; las resp
 | GET | `/services`, `/services/{id}/slots` | Catálogo y cupos libres (estudiante) |
 | POST | `/appointments/proposals?k=` | Opciones compatibles, sin reservar (estudiante) |
 | POST / GET / DELETE | `/appointments`, `/appointments?estudiante_id=`, `/appointments/{id}` | Reservar, listar y cancelar (estudiante) |
+| GET | `/coordinacion/lotes` | Modo lote: servicios por utilización (umbral 75 %), lote abierto e historial |
+| GET | `/coordinacion/actividad`, `/coordinacion/actividad/stream` | Registro de lo nuevo y flujo en tiempo real (SSE) |
+| GET | `/estudiantes/{id}/avisos`, `/avisos/stream` | Avisos en vivo al estudiante (p. ej. «tu lote se resolvió») |
+| POST | `/appointments/lote` | Entrar al lote cuando todo lo compatible está en modo lote |
+| POST | `/chat` | Mensaje al agente conversacional (requiere Ollama) |
+| GET / DELETE | `/chat/{session_id}?estudiante_id=` | Releer o borrar una conversación |
+| GET | `/chat/estado` | Diagnóstico de Ollama y del modelo |
 
-Contrato con ejemplos JSON: [docs/api_coordinacion.md](docs/api_coordinacion.md). Aún no hay `/api/chat`: requiere el agente conversacional.
+Contrato con ejemplos JSON: [docs/api_coordinacion.md](docs/api_coordinacion.md). Contrato del chat y cómo instalar el agente: [docs/api_agente.md](docs/api_agente.md) (`pip install -r requirements-agente.txt`; sin eso, `/api/chat` responde 503 y el resto funciona).
 
 ## Parámetros de la demo (`config/parametros.yaml`)
 
@@ -92,6 +100,7 @@ Contrato con ejemplos JSON: [docs/api_coordinacion.md](docs/api_coordinacion.md)
 ```powershell
 python -m pytest -q                    # motor, herramientas, aviso, API y siembra
 python -m app.cli_siembra x1 x4.3     # resumen de la siembra por escenario
+python -m app.cli_chat                # conversar con el agente en la terminal (requiere Ollama)
 python -m experimentos.demo_herramientas
 python -m experimentos.validar_aviso   # requiere D3 (AURA_DATA_DIR)
 python -m experimentos.experimento_genetico
@@ -104,6 +113,7 @@ python -m experimentos.comparar_d5     # requiere D3 y D5
 
 - [API de Coordinación (contrato para el front)](docs/api_coordinacion.md)
 - [Cómo funciona AURA](docs/como_funciona.md)
+- [API del agente conversacional (endpoints, parámetros, instalación con Ollama)](docs/api_agente.md)
 - [Contrato de herramientas del agente](docs/contrato_herramientas.md)
 - [Resultados clave para el concurso](docs/resultados_clave.md)
 - [Decisiones pendientes del equipo](docs/decisiones_pendientes.md)

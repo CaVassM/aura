@@ -1,4 +1,5 @@
-# AURA - levanta el backend (FastAPI, puerto 8080) y el frontend (Next.js, puerto 3000).
+# AURA - levanta el backend (FastAPI, puerto 8080, con el agente conversacional dentro) y el frontend
+# (Next.js, puerto 3000). El agente corre dentro del backend; lo unico aparte es Ollama (puerto 11434).
 #
 # Uso (desde esta carpeta):
 #   .\iniciar.bat                     doble clic o desde la terminal
@@ -7,7 +8,10 @@
 #   $env:AURA_PYTHON = "C:\ruta\python.exe"   para forzar el Python a usar
 #
 # Prepara todo lo que falte: crea o repara el entorno virtual del backend, instala sus
-# dependencias y las del frontend, y copia .env.local. Ctrl+C detiene los dos servidores.
+# dependencias (incluidas las del agente: LangChain y langchain-ollama) y las del frontend, y copia .env.local.
+# Si Ollama no esta abierto, lo inicia (y lo cierra al salir solo si lo inicio este script) y avisa si falta
+# el modelo (AURA_OLLAMA_MODEL, por defecto gemma4; se lee del entorno o de src\backend\.env).
+# Ctrl+C detiene los dos servidores.
 # Los logs quedan en la carpeta logs\. (Texto sin tildes a proposito: PowerShell 5.1 lee mal UTF-8.)
 
 param(
@@ -19,6 +23,8 @@ param(
 # Los errores importantes se revisan a mano con $LASTEXITCODE y -ErrorAction Stop.
 $ErrorActionPreference = "Continue"
 $Raiz = $PSScriptRoot
+# Las llamadas a localhost no deben pasar por el proxy del sistema (en Windows PowerShell 5.1 lo hacen y se demoran).
+try { [System.Net.WebRequest]::DefaultWebProxy = $null } catch { }
 $Back = Join-Path $Raiz "src\backend"
 $Front = Join-Path $Raiz "src\frontend"
 $Logs = Join-Path $Raiz "logs"
@@ -91,7 +97,8 @@ function Venv-Sano {
 }
 
 Paso "Backend: entorno de Python"
-$huella = (Get-FileHash (Join-Path $Back "requirements.txt") -Algorithm SHA256).Hash
+$reqAgente = Join-Path $Back "requirements-agente.txt"   # incluye requirements.txt
+$huella = (Get-FileHash (Join-Path $Back "requirements.txt") -Algorithm SHA256).Hash + (Get-FileHash $reqAgente -Algorithm SHA256).Hash
 $archivoHuella = Join-Path $Back ".venv\requirements.sha256"
 
 if (-not (Venv-Sano)) {
@@ -112,11 +119,13 @@ if (-not (Venv-Sano)) {
 
 if (-not ((Test-Path $archivoHuella) -and ((Get-Content $archivoHuella -Raw).Trim() -eq $huella))) {
     Write-Host "Instalando dependencias del backend (puede tardar unos minutos la primera vez)..."
-    & $VenvPy -m pip install --disable-pip-version-check -q -r (Join-Path $Back "requirements.txt")
-    if ($LASTEXITCODE -ne 0) { Falla "Fallo la instalacion de dependencias del backend (pip)." }
+    & $VenvPy -m pip install --disable-pip-version-check -q -r $reqAgente
+    if ($LASTEXITCODE -ne 0) { Falla "Fallo la instalacion de dependencias del backend y del agente (pip)." }
     Set-Content -Path $archivoHuella -Value $huella
 }
 if (-not (Venv-Sano)) { Falla "El entorno del backend sigue sin funcionar. Borra src\backend\.venv y vuelve a ejecutar." }
+& $VenvPy -c "import langchain, langchain_ollama" 2>$null
+if ($LASTEXITCODE -ne 0) { Aviso "No se pudieron importar LangChain / langchain-ollama: el chat respondera 503 hasta que se instalen (pip install -r src\backend\requirements-agente.txt)." }
 Write-Host "Backend listo."
 
 # ---------------------------------------------------------------- Node
@@ -136,6 +145,83 @@ if (-not (Test-Path (Join-Path $Front "node_modules\next"))) {
     if ($LASTEXITCODE -ne 0) { Falla "Fallo npm install." }
 }
 Write-Host "Frontend listo."
+
+# ---------------------------------------------------------------- Ollama (modelo del agente)
+$envBack = Join-Path $Back ".env"
+
+function Leer-Config($nombre, $defecto) {
+    $valor = [Environment]::GetEnvironmentVariable($nombre)
+    if ($valor) { return $valor }
+    if (Test-Path $envBack) {
+        $linea = Get-Content $envBack | Where-Object { $_ -match "^\s*$nombre\s*=\s*(.+?)\s*$" } | Select-Object -Last 1
+        if ($linea -match "=\s*(.+?)\s*$") { return $Matches[1].Trim('"').Trim("'") }
+    }
+    return $defecto
+}
+
+# "Esta abierto" = el puerto acepta conexiones (TCP). No se usa una peticion HTTP con tiempo limite corto: en Windows
+# PowerShell la primera peticion puede tardar varios segundos (deteccion de proxy) y daba falsos "no esta abierto".
+function Ollama-Abierto($url) {
+    try {
+        $uri = [Uri]$url
+        $hosts = @($uri.Host)
+        if ($uri.Host -eq "localhost") { $hosts = @("127.0.0.1", "::1") }
+        foreach ($h in $hosts) {
+            $cliente = New-Object System.Net.Sockets.TcpClient
+            try {
+                $intento = $cliente.BeginConnect($h, $uri.Port, $null, $null)
+                if ($intento.AsyncWaitHandle.WaitOne(3000, $false) -and $cliente.Connected) { return $true }
+            } catch { } finally { $cliente.Close() }
+        }
+    } catch { }
+    return $false
+}
+
+# Lista de modelos instalados. Puede fallar o tardar sin que Ollama este caido, asi que se reintenta y no es fatal.
+function Ollama-Modelos($url) {
+    $sonda = $url -replace "//localhost", "//127.0.0.1"
+    $motivo = ""
+    for ($i = 0; $i -lt 3; $i++) {
+        try {
+            $r = Invoke-RestMethod "$sonda/api/tags" -TimeoutSec 15 -ErrorAction Stop
+            return @{ ok = $true; nombres = @($r.models | ForEach-Object { $_.name }) }
+        } catch { $motivo = $_.Exception.Message; Start-Sleep -Seconds 1 }
+    }
+    return @{ ok = $false; motivo = $motivo }
+}
+
+$UrlOllama = (Leer-Config "AURA_OLLAMA_URL" "http://localhost:11434").TrimEnd("/")
+$ModeloAgente = Leer-Config "AURA_OLLAMA_MODEL" "gemma4"
+$ollama = $null   # solo si lo inicia este script
+
+Paso "Agente: Ollama ($ModeloAgente)"
+if (-not (Ollama-Abierto $UrlOllama)) {
+    if (Get-Command ollama -ErrorAction SilentlyContinue) {
+        Write-Host "Ollama no esta abierto (nada escucha en $UrlOllama): lo inicio (ollama serve)."
+        $ollama = Start-Process -FilePath "ollama" -ArgumentList @("serve") -PassThru -WindowStyle Hidden
+        for ($i = 0; $i -lt 20; $i++) {
+            if (Ollama-Abierto $UrlOllama) { break }
+            Start-Sleep -Seconds 1
+        }
+    } else {
+        Aviso "No encontre Ollama (https://ollama.com) ni nada escucha en $UrlOllama. El backend y Coordinacion funcionan, pero el chat del estudiante no."
+    }
+}
+if (Ollama-Abierto $UrlOllama) {
+    $lista = Ollama-Modelos $UrlOllama
+    if (-not $lista.ok) {
+        Aviso "Ollama esta abierto, pero no pude leer su lista de modelos ($($lista.motivo)). Sigo igual: el estado del agente, mas abajo, dice si el modelo esta."
+    } else {
+        $esta = @($lista.nombres | Where-Object { $_ -eq $ModeloAgente -or $_ -like ($ModeloAgente + ":*") }).Count -gt 0
+        if ($esta) {
+            Write-Host "Ollama abierto con el modelo $ModeloAgente." -ForegroundColor Green
+        } else {
+            Aviso "Ollama esta abierto, pero no tiene el modelo '$ModeloAgente'. Descargalo con:  ollama pull $ModeloAgente   (o cambia AURA_OLLAMA_MODEL en src\backend\.env por uno de 'ollama list')."
+        }
+    }
+} elseif ($ollama) {
+    Aviso "Inicie Ollama pero nada escucha en $UrlOllama despues de 20 s. Abrelo a mano; el chat no funcionara hasta entonces."
+}
 
 # ---------------------------------------------------------------- Puertos
 foreach ($par in @(@($PuertoApi, "backend"), @($PuertoWeb, "frontend"))) {
@@ -174,6 +260,12 @@ try {
         Falla "El backend no arranco. Revisa el error de arriba (logs\backend.err.log)."
     }
     Write-Host "Backend en http://localhost:$PuertoApi  (docs: http://localhost:$PuertoApi/docs)" -ForegroundColor Green
+    try {
+        $estadoAgente = Invoke-RestMethod "http://127.0.0.1:$PuertoApi/api/chat/estado" -TimeoutSec 5
+        $color = "Yellow"
+        if ($estadoAgente.dependencias_instaladas -and $estadoAgente.ollama_disponible -and $estadoAgente.modelo_instalado) { $color = "Green" }
+        Write-Host "Agente ($($estadoAgente.modelo)): $($estadoAgente.detalle)" -ForegroundColor $color
+    } catch { Aviso "No pude consultar el estado del agente (GET /api/chat/estado)." }
 
     Paso "Arrancando el frontend (puerto $PuertoWeb)"
     $web = Start-Process -FilePath "cmd.exe" -WorkingDirectory $Front -PassThru -NoNewWindow `
@@ -196,7 +288,7 @@ try {
     }
     Write-Host "Frontend en http://localhost:$PuertoWeb" -ForegroundColor Green
 
-    Write-Host "`nTodo listo:  http://localhost:$PuertoWeb/coordinacion" -ForegroundColor Green
+    Write-Host "`nTodo listo:  http://localhost:$PuertoWeb/coordinacion   (chat del estudiante: http://localhost:$PuertoWeb/campus/chat)" -ForegroundColor Green
     Write-Host "Presiona Ctrl+C para detener los dos servidores. Logs en $Logs"
     if (-not $SinNavegador) { Start-Process "http://localhost:$PuertoWeb/coordinacion" }
 
@@ -208,6 +300,7 @@ finally {
     Write-Host "`nDeteniendo servidores..."
     Detener-Proceso $api
     Detener-Proceso $web
+    Detener-Proceso $ollama
     Liberar-Puerto $PuertoApi
     Liberar-Puerto $PuertoWeb
 }

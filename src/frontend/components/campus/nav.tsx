@@ -23,14 +23,8 @@ export const campusNav: NavItem[] = [
 ];
 
 export const campusBrand = {
-  icon: <GraduationCap size={20} className="text-aura-purple" />,
-  iconBg: "bg-aura-purple-nav",
+  icon: <GraduationCap size={20} className="text-co-teal-deep" />,
+  iconBg: "bg-co-bg",
   name: "Universidad Nova",
-  subtitle: "Aether · Campus Virtual",
-};
-
-export const campusUser = {
-  name: "Lucía Mendoza",
-  role: "Estudiante",
-  initials: "LM",
+  subtitle: "Aethera · Campus Virtual",
 };

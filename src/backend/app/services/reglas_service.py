@@ -24,7 +24,7 @@ class ReglasService:
         tipos = list(t["afinidad"])
         aviso = p["aviso"]
         umbrales = {
-            "S1": aviso["dropout_alert"],
+            "S1": aviso["evento_evaluacion"],  # temporada de evaluación (D7); la alerta de abandono de D3 ya no es señal
             "S2": aviso["caida_asistencia"],
             "S3": aviso["cambio_nota"],
             "S4": aviso["percentil_carga_creditos"],

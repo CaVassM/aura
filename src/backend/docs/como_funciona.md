@@ -22,14 +22,14 @@ Una **señal** es una condición que resume una parte de la trayectoria académi
 
 | Señal | Regla actual | Fuente |
 |---|---|---|
-| S1: alerta | `dropout_alert` es `medium` o `high`. | `aviso.dropout_alert`, [parametros.yaml](../config/parametros.yaml) |
+| S1: temporada | Hoy cae en una semana `evaluation_week` de D7 (en la plataforma; la validación sobre D3 usa todavía `dropout_alert` medio o alto). | `aviso.evento_evaluacion`, [parametros.yaml](../config/parametros.yaml) |
 | S2: asistencia | La tasa de asistencia actual bajó al menos **0,05** frente al período anterior. | `aviso.caida_asistencia`, [parametros.yaml](../config/parametros.yaml) |
 | S3: nota | `grade_change` es menor o igual que **−0,5**. | `aviso.cambio_nota`, [parametros.yaml](../config/parametros.yaml) |
 | S4: carga | Los créditos están en el cuartil superior del período (percentil **0,75**). | `aviso.percentil_carga_creditos`, [parametros.yaml](../config/parametros.yaml) |
 
 **Ejemplo real de D3.** Para `STU_AE_000008`, entre `PER_2026_1` y `PER_2026_2`, la alerta pasa a `medium`; la asistencia baja de **0,884** a **0,732**; `grade_change` es **0,14**, así que S3 no se cumple; y la carga de **27** créditos alcanza el corte del percentil **27,0**. Puntaje: S1 + S2 + S4 = **3**, por lo que es elegible durante la evaluación de `PER_2026_2`. Los valores académicos salen de `D3_academic_trajectory.csv`; los cortes de [parametros.yaml](../config/parametros.yaml).
 
-La comparación agregada con D1 sirve para validar grupos después de calcular el aviso. D1 no entra en las reglas, no cambia el puntaje y no se entrega al agente: así evitamos usar una encuesta de bienestar personal para decidir a quién contactar. Con puntaje mínimo **3**, los resultados son:
+La comparación agregada con D1 sirve para validar grupos después de calcular el aviso. D1 no entra en las reglas, no cambia el puntaje y no se entrega al agente: así evitamos usar una encuesta de bienestar personal para decidir a quién contactar. De lo académico, el agente solo puede consultar la **asistencia** de la persona (la señal S2), únicamente cuando ella habla de sus faltas; no ve notas, créditos ni alertas (herramienta `consultar_asistencia`, ver [api_agente.md](api_agente.md)). Con puntaje mínimo **3**, los resultados son:
 
 | Período | Elegibles entre estudiantes D3 | Ansiedad media D1: elegibles | Ansiedad media D1: no elegibles | Fuente |
 |---|---:|---:|---:|---|
@@ -111,7 +111,23 @@ La población es de **50** órdenes y se comparan **5** semillas (**42–46**). 
 
 ## 8. Modo directo y modo lote
 
-El **modo directo** atiende una conversación: propone opciones y reserva cuando la persona acepta. Es el único modo implementado. El **modo lote** es una etapa futura: tomaría solicitudes pendientes y optimizaría asignaciones en conjunto. El diseño deja como referencia un umbral de utilización por servicio del **70%** para estudiar cuándo activar ese proceso; no cambia el comportamiento actual. Fuente: `modo_lote_umbral_utilizacion` en [parametros.yaml](../config/parametros.yaml).
+El **modo directo** atiende una conversación: propone opciones y reserva cuando la persona acepta. El **modo lote** reparte los cupos de los servicios muy ocupados entre varias solicitudes a la vez, con el algoritmo genético de la sección 7. Los dos funcionan en la plataforma.
+
+**Cuándo se activa.** Cada servicio tiene una **utilización**: cupos reservados ÷ cupos liberados de la agenda abierta (la misma «ocupación» del panel). Cuando llega al **75 %** (`modo_lote_umbral_utilizacion`, acordado por el equipo; antes 70 % provisional), el servicio entra en **modo lote**: sus cupos dejan de ofrecerse uno a uno. Si baja del umbral (por una cancelación), vuelve al modo directo.
+
+**Qué le pasa a una solicitud.**
+
+1. `proponer_opciones` busca solo entre servicios en modo directo. Si hay opciones, todo sigue como siempre.
+2. Si lo único compatible está en modo lote, no hay opciones para elegir: se ofrece **entrar al lote** (el agente lo explica y la persona debe aceptar).
+3. La solicitud espera en el **lote abierto**. El primero que entra abre la cuenta regresiva.
+
+**Cuándo se cierra: solo.** A los `lote.ventana_segundos` (30 s) de entrar la primera solicitud, o apenas junta `lote.tamano_maximo` (5), lo que ocurra primero. Nadie lo cierra a mano.
+
+**Cómo se resuelve.** Al cerrarse, el genético decide un orden de prioridad para todo el grupo y el decodificador asigna a cada persona la opción libre de menor costo (mismas reglas R1–R6, mismo costo individual y mismo fitness Z1–Z5 que en la sección 7). Después la plataforma reserva las citas, registra como desencuentro a quien no encontró cupo y avisa a cada estudiante en vivo. Dos simplificaciones, por correr en vivo: la normalización de Z usa los límites fijos del «plan B» del experimento (no las cinco calibraciones por lote), y la utilización de Z3 usa como denominador los cupos que aún quedan libres. Si el genético no mejora el orden de llegada, se conserva el de llegada. Con 1 solicitud no hay nada que optimizar.
+
+**Qué esperar.** Como dice la sección 9, el genético no crea capacidad: cuando las solicitudes de un lote no compiten por los mismos cupos, el resultado es igual al de asignar por orden de llegada. Cambia el orden cuando eso reparte mejor (más asignadas, menos espera, más equidad entre diurnos y nocturnos).
+
+Todo vive en RAM y se vacía al reiniciar el backend o la demo. Código: [lote_service.py](../app/services/lote_service.py) (reglas, temporizador, aplicar reservas) y [lote.py](../aura/herramientas/lote.py) (planificación con el genético). Parámetros: `modo_lote_umbral_utilizacion` y el bloque `lote` de [parametros.yaml](../config/parametros.yaml).
 
 ## 9. Resultados del experimento y lectura honesta
 

@@ -5,12 +5,14 @@ de esta fachada. Devuelve diccionarios JSON; no expone dataclasses ni la agenda 
 Todo el estado vive en RAM dentro de la instancia.
 """
 
+from dataclasses import replace
 from datetime import timedelta
 
 from .datos.modelos import Solicitud, cargar_csv
 from .herramientas.esquemas import esquemas_herramientas
 from .herramientas.estado_agenda import AgendaViva
 from .herramientas.herramientas import HerramientasAgente
+from .herramientas.lote import planificar_lote
 from .motor.baselines import escalar_demanda, orden_llegada, simular_solicitudes
 
 
@@ -26,15 +28,30 @@ class ServicioAsignacion:
 
     def esquemas_herramientas(self) -> list[dict]:
         """Declaraciones name/description/parameters para el tool calling de un LLM."""
-        return esquemas_herramientas()
+        distritos = sorted({s.distrito for s in self._agenda.servicios})
+        return esquemas_herramientas(distritos, list(self._agenda.tablas["motivo_a_servicio"]))
 
-    def ejecutar_herramienta(self, nombre: str, argumentos: dict) -> dict:
+    def ejecutar_herramienta(self, nombre: str, argumentos: dict | str | None) -> dict:
         """Ejecuta una llamada de herramienta tal como la emite el LLM."""
         return self._herramientas.ejecutar(nombre, argumentos)
 
-    def proponer_opciones(self, solicitud: dict, k: int = 3) -> dict:
-        """Hasta k propuestas válidas, sin reservarlas."""
-        return self._herramientas.proponer_opciones(solicitud, k)
+    def proponer_opciones(self, solicitud: dict, k: int = 3, excluir_servicios=None) -> dict:
+        """Hasta k propuestas válidas, sin reservarlas (sin los cupos de `excluir_servicios`, los de modo lote)."""
+        return self._herramientas.proponer_opciones(solicitud, k, excluir_servicios)
+
+    def planificar_lote(
+        self, solicitudes: list[dict], poblacion: int = 40, generaciones: int = 100, semilla: int = 42
+    ) -> dict:
+        """Asignación conjunta (genético) de varias solicitudes en orden de llegada. No reserva nada.
+
+        Cada solicitud es un diccionario como el de `proponer_opciones`; `solicitud_id` del plan es
+        `NNN|<estudiante_id>` (NNN = posición de llegada).
+        """
+        modelos = []
+        for posicion, entrada in enumerate(solicitudes, 1):
+            modelo, _ = self._herramientas.convertir_solicitud(entrada)
+            modelos.append(replace(modelo, id=f"{posicion:03d}|{modelo.id}"))
+        return planificar_lote(self._agenda, modelos, poblacion, generaciones, semilla)
 
     def reservar(
         self, estudiante_id: str, opcion_id: str, servicio_ideal: str | None = None
@@ -42,9 +59,9 @@ class ServicioAsignacion:
         """Reserva la opción si su cupo sigue libre."""
         return self._herramientas.reservar(estudiante_id, opcion_id, servicio_ideal)
 
-    def cancelar_cita(self, cita_id: str) -> dict:
-        """Cancela una cita y libera su cupo."""
-        return self._herramientas.cancelar_cita(cita_id)
+    def cancelar_cita(self, cita_id: str, estudiante_id: str | None = None) -> dict:
+        """Cancela una cita y libera su cupo (con `estudiante_id`, solo su dueño puede)."""
+        return self._herramientas.cancelar_cita(cita_id, estudiante_id)
 
     def registrar_desencuentro(self, solicitud: dict) -> dict:
         """Registra en RAM una solicitud sin opción compatible."""

@@ -43,6 +43,16 @@ def porcentaje(ocupados: int, liberados: int) -> float:
     return round(100 * ocupados / liberados, 1) if liberados else 0.0
 
 
+def umbral_lote(estado: AppState) -> float:
+    """Utilización (0–1) desde la cual un servicio entra en modo lote (`modo_lote_umbral_utilizacion`)."""
+    return float(estado.parametros["modo_lote_umbral_utilizacion"])
+
+
+def en_lote(estado: AppState, reservados: int, liberados: int) -> bool:
+    """¿El servicio está en modo lote? Utilización = cupos reservados / cupos liberados de la agenda abierta."""
+    return liberados > 0 and reservados / liberados >= umbral_lote(estado)
+
+
 def nivel(estado: AppState, pct: float) -> str:
     """`baja` bajo el primer umbral, `alta` sobre el segundo y `media` en medio."""
     umbrales = estado.parametros["coordinacion"]["nivel_ocupacion"]

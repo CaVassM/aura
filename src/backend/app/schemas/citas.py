@@ -19,6 +19,9 @@ class SolicitudIn(BaseModel):
     canales_aceptables: list[str] = Field(min_length=1, examples=[["digital", "phone"]])
     grupo: str = Field(default="diurno", pattern="^(diurno|nocturno)$")
     fecha_solicitud: str | None = None
+    solo_servicio_ideal: bool = Field(
+        default=False, description="La persona no acepta otro servicio que el ideal para su motivo (sin alternativos)"
+    )
 
 
 class ReservaIn(BaseModel):
@@ -46,10 +49,27 @@ class OpcionOut(BaseModel):
     afinidad: float
 
 
+class LoteOfertaOut(BaseModel):
+    """Cuando solo hay servicios en modo lote: cómo funciona el lote y cuánto falta para que cierre."""
+
+    umbral_pct: float
+    ventana_s: int
+    tamano_maximo: int
+    abierto: bool
+    pendientes: int
+    cierra_en: str | None = None
+    servicios: list[str] = []
+
+
 class PropuestaOut(BaseModel):
     opciones: list[OpcionOut]
     servicio_ideal: str | None = None
     motivo_vacio: str | None = None
+    lote: LoteOfertaOut | None = None
+    lote_para_ideal: bool = Field(
+        default=False,
+        description="Hay opciones directas (de otro servicio) y además el servicio ideal tiene plazas en lote: se puede entrar a él",
+    )
 
 
 class ServicioOut(BaseModel):
@@ -75,7 +95,10 @@ class CitaOut(BaseModel):
     estudiante_id: str
     service_id: str
     servicio_nombre: str
+    tipo: str
     tipo_label: str
+    distrito: str
+    hora_fin: str
     slot: SlotOut
     canal: str
     estado: str
@@ -96,7 +119,10 @@ def cita_out(cita) -> CitaOut:
         estudiante_id=cita.estudiante_id,
         service_id=cita.service_id,
         servicio_nombre=cita.servicio_nombre,
+        tipo=cita.tipo,
         tipo_label=cita.tipo_label,
+        distrito=cita.distrito,
+        hora_fin=cita.hora_fin,
         slot=SlotOut(
             id=cita.cupo_id,
             service_id=cita.service_id,

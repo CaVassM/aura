@@ -52,8 +52,8 @@ def precalcular_opciones(
             ):
                 continue  # R1
             a = afinidad(s.servicio_ideal, c.tipo)
-            if a < UMBRAL_AFINIDAD:
-                continue  # R2
+            if a < UMBRAL_AFINIDAD or (s.solo_servicio_ideal and c.tipo != s.servicio_ideal):
+                continue  # R2 (y «solo el servicio ideal», si la persona no acepta otro)
             # Canales válidos del mismo cupo son alternativas dominadas salvo P:
             # el canal con mayor P siempre cuesta menos y consume el mismo cupo.
             canales_validos = [

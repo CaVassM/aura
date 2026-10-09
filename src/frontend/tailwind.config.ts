@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
-// `aura.*` es la paleta del campus del estudiante (no se toca).
+// `aura.*` es la paleta original del campus. El chat, "Mis citas" y el marco del campus usan hoy
+// la paleta `co.*` (la misma del panel de Coordinación) para que las dos vistas se sientan un solo producto.
 // `co.*` es la paleta del panel de Coordinación: crema cálido, teal profundo y navy para el
 // texto; coral = alta demanda y desencuentros, ámbar = media, salvia = baja.
 // Contraste mínimo AA: los textos usan navy / ink / *-ink sobre crema o sobre sus tintes; los
@@ -69,6 +70,7 @@ const config: Config = {
         card: "0 1px 2px rgba(36,52,66,0.04), 0 1px 3px rgba(36,52,66,0.06)",
         pop: "0 8px 24px rgba(29,46,60,0.14)",
         drawer: "-12px 0 32px rgba(29,46,60,0.16)",
+        lift: "0 14px 30px -10px rgba(15,59,66,0.30), 0 2px 6px rgba(15,59,66,0.08)",
       },
       borderRadius: {
         xl2: "20px",
@@ -99,6 +101,27 @@ const config: Config = {
           "0%": { opacity: "0.55", transform: "scale(1)" },
           "100%": { opacity: "0", transform: "scale(2.1)" },
         },
+        // Chat del estudiante
+        rise: {
+          "0%": { opacity: "0", transform: "translateY(12px) scale(0.97)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        dot: {
+          "0%, 80%, 100%": { opacity: "0.35", transform: "translateY(0)" },
+          "40%": { opacity: "1", transform: "translateY(-4px)" },
+        },
+        draw: {
+          "0%": { strokeDashoffset: "26" },
+          "100%": { strokeDashoffset: "0" },
+        },
+        sheen: {
+          "0%": { transform: "translateX(-120%) skewX(-18deg)" },
+          "100%": { transform: "translateX(260%) skewX(-18deg)" },
+        },
+        breathe: {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.06)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 450ms cubic-bezier(0.22, 1, 0.36, 1) both",
@@ -108,6 +131,11 @@ const config: Config = {
         "grow-x": "grow-x 700ms cubic-bezier(0.22, 1, 0.36, 1) both",
         "pop-in": "pop-in 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
         halo: "halo 2.4s ease-out infinite",
+        rise: "rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        dot: "dot 1.2s ease-in-out infinite",
+        draw: "draw 520ms 180ms cubic-bezier(0.65, 0, 0.35, 1) both",
+        sheen: "sheen 1.4s 350ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        breathe: "breathe 3.2s ease-in-out infinite",
       },
     },
   },

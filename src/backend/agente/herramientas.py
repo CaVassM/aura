@@ -1,0 +1,560 @@
+"""Herramientas LangChain del agente, creadas para cada mensaje.
+
+Diferencias deliberadas con las herramientas del motor (`aura.herramientas`):
+- El modelo NO elige el `estudiante_id`: sale de la sesión, así nadie reserva ni cancela a nombre de otra persona.
+- `reservar_cita` recibe el NÚMERO de la opción elegida (1, 2, 3…) de la última lista; el modelo nunca ve ni copia
+  identificadores internos, así que no puede inventarlos ni mostrárselos a la persona.
+- `proponer_opciones` se niega a buscar si la persona no ha dicho días ni canal, y `cancelar_cita` se niega si la
+  persona no pidió cancelar ni confirmó una pregunta de cancelar (ver `entrada.py`).
+- `registrar_desencuentro` y `entrar_a_lote` no reciben argumentos: usan la última solicitud buscada.
+- Las respuestas son JSON compacto y en español, listo para que el modelo lo redacte.
+"""
+
+import json
+import unicodedata
+from dataclasses import dataclass, field
+from datetime import date
+
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, Field
+
+from . import entrada
+from .prompt import DIAS_ES, MESES_ES
+from .puerto import PuertoAgenda
+from .sesion import SesionChat
+
+
+@dataclass
+class EventoHerramienta:
+    """Una llamada que hizo el modelo en este turno y lo que devolvió la plataforma."""
+
+    nombre: str
+    ok: bool
+    resultado: dict
+
+
+@dataclass
+class ContextoTurno:
+    sesion: SesionChat
+    puerto: PuertoAgenda
+    mensaje: str = ""  # el mensaje que se está respondiendo (aún no está en sesion.mensajes)
+    eventos: list[EventoHerramienta] = field(default_factory=list)
+    busquedas: set = field(default_factory=set)  # búsquedas ya hechas en este turno (frena los bucles)
+
+
+class FranjaArgs(BaseModel):
+    dia: str = Field(description="Día en inglés abreviado: Mon, Tue, Wed, Thu, Fri, Sat o Sun")
+    desde: str = Field(description="Hora de inicio HH:MM en 24 h, p. ej. 09:00")
+    hasta: str = Field(description="Hora de fin HH:MM en 24 h, p. ej. 12:00")
+
+
+class ProponerArgs(BaseModel):
+    motivo: str = Field(
+        description=(
+            "Uno de: academic_pressure, sleep_and_routine, social_support, career_concern, "
+            "preventive_guidance, service_navigation"
+        )
+    )
+    franjas: list[FranjaArgs] = Field(min_length=1, description="Días y horas en que la persona puede asistir")
+    canales_aceptables: list[str] = Field(
+        min_length=1, description="Lista con uno o más de: digital (videollamada), phone (teléfono), in_person (presencial)"
+    )
+    distrito: str = Field(
+        default="",
+        description=(
+            "Solo si la persona dijo que irá a otro distrito distinto al de su perfil. Uno de: DIST_GAIA, "
+            "DIST_NEBULA, DIST_VECTOR, DIST_HORIZON, DIST_QUANTUM. Si no, déjalo vacío"
+        ),
+    )
+    grupo: str = Field(
+        default="",
+        description=(
+            "diurno o nocturno: el turno en que ESTUDIA la persona. Solo si ella lo dijo (p. ej. «estudio de noche»); "
+            "si no lo dijo, déjalo vacío y no se lo preguntes"
+        ),
+    )
+    fecha: str = Field(
+        default="",
+        description=(
+            "AAAA-MM-DD. Solo si la persona pidió una FECHA concreta (p. ej. «el 18 de noviembre»). Si dijo solo el día de la "
+            "semana («el miércoles»), déjalo vacío. Con fecha, solo se buscan cupos de ese día"
+        ),
+    )
+    k: int = Field(default=3, ge=1, le=5, description="Cuántas opciones buscar")
+
+
+class ReservarArgs(BaseModel):
+    numero: int = Field(ge=1, description="Número de la opción que la persona eligió en la última lista (1, 2, 3…)")
+
+
+class CancelarArgs(BaseModel):
+    cita_id: str = Field(description="Número de cita, p. ej. CITA-0000001")
+
+
+class SinArgs(BaseModel):
+    pass
+
+
+def _grupo(valor: str) -> str | None:
+    """Normaliza lo que el modelo captura del turno de estudio; None si no es reconocible."""
+    v = valor.strip().lower()
+    if v in {"nocturno", "noche", "night", "evening", "vespertino", "nocturna"}:
+        return "nocturno"
+    if v in {"diurno", "dia", "día", "day", "mañana", "diurna"}:
+        return "diurno"
+    return None
+
+
+def _distrito_codigo(valor: str) -> str:
+    """«Nébula», «nebula» o «DIST_NEBULA» → `DIST_NEBULA` (el motor valida que exista)."""
+    base = unicodedata.normalize("NFD", valor.strip().lower())
+    texto = "".join(c for c in base if unicodedata.category(c) != "Mn").upper().replace(" ", "_")
+    return texto if texto.startswith("DIST_") else f"DIST_{texto}"
+
+
+def _grupo_por_horas(franjas: list[dict]) -> str:
+    """Sin dato explícito: si todo lo que puede es de 18:00 en adelante, se asume turno nocturno."""
+    return "nocturno" if franjas and all(f["desde"].strip()[:2].isdigit() and int(f["desde"].strip()[:2]) >= 18 for f in franjas) else "diurno"
+
+
+def _json(datos) -> str:
+    return json.dumps(datos, ensure_ascii=False)
+
+
+def _pct(tasa: float) -> str:
+    return f"{round(100 * tasa)} %"
+
+
+def _dia_es(fecha_iso: str) -> str:
+    return DIAS_ES[date.fromisoformat(fecha_iso).weekday()]
+
+
+def _fecha_texto(fecha_iso: str) -> str:
+    f = date.fromisoformat(fecha_iso)
+    return f"{DIAS_ES[f.weekday()]} {f.day} de {MESES_ES[f.month - 1]}"
+
+
+def _opcion_para_modelo(numero: int, o: dict) -> dict:
+    canal = o.get("canal_label", o["canal"])
+    tipo = o.get("tipo_label", o["tipo"])
+    texto = f"{o['servicio_nombre']} ({tipo}) · {_fecha_texto(o['fecha'])}, de {o['hora_inicio']} a {o['hora_fin']} · {canal}"
+    if o["es_alternativa"]:
+        texto += " · servicio distinto al ideal, pero compatible"
+    return {"numero": numero, "texto": texto, "distrito": o["distrito"], "dias_de_espera": o["dias_espera"]}
+
+
+def _cita_para_modelo(c: dict) -> dict:
+    canal = c.get("canal_label", c["canal"])
+    return {
+        "cita_id": c["id"],
+        "texto": f"{c['servicio_nombre']} ({c.get('tipo_label', c['tipo'])}) · {_fecha_texto(c['fecha'])}, "
+        f"de {c['hora_inicio']} a {c['hora_fin']} · {canal}",
+        "estado": c["estado"],
+    }
+
+
+def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
+    sesion, puerto = ctx.sesion, ctx.puerto
+
+    def registrar(nombre: str, ok: bool, resultado: dict) -> None:
+        ctx.eventos.append(EventoHerramienta(nombre, ok, resultado))
+
+    def proponer_opciones(
+        motivo: str,
+        franjas: list[FranjaArgs],
+        canales_aceptables: list[str],
+        distrito: str = "",
+        grupo: str = "",
+        fecha: str = "",
+        k: int = 3,
+    ) -> str:
+        textos = [m.content for m in sesion.mensajes if m.type == "human" and isinstance(m.content, str)]
+        faltan = entrada.faltantes(textos + [ctx.mensaje])
+        if faltan:
+            resultado = {
+                "ok": False,
+                "error": "faltan_datos",
+                "detalle": "La persona todavía no dijo " + " ni ".join(faltan) + ". Pregúntaselo; no los inventes ni busques todavía.",
+            }
+            registrar("proponer_opciones", False, resultado)
+            return _json(resultado)
+        distrito = _distrito_codigo(distrito) if distrito.strip() else sesion.contexto.distrito
+        if not distrito:
+            return _json({"ok": False, "error": "falta_distrito", "detalle": "Pregunta en qué distrito está la persona."})
+        franjas = [f.model_dump() if isinstance(f, BaseModel) else f for f in franjas]
+        fecha = fecha.strip()
+        if fecha:
+            try:
+                dia_fecha = date.fromisoformat(fecha)
+            except ValueError:
+                resultado = {"ok": False, "error": "fecha_invalida", "detalle": "`fecha` debe ser AAAA-MM-DD, p. ej. 2026-11-18."}
+                registrar("proponer_opciones", False, resultado)
+                return _json(resultado)
+            # La fecha manda sobre el día de la semana que pusiera el modelo; las horas se respetan.
+            nombre_dia = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[dia_fecha.weekday()]
+            franjas = [{**f, "dia": nombre_dia} for f in franjas]
+        firma = _json([motivo, distrito, franjas, sorted(canales_aceptables), fecha, k])
+        if firma in ctx.busquedas:
+            resultado = {
+                "ok": False,
+                "error": "busqueda_repetida",
+                "detalle": "Ya hiciste exactamente esta búsqueda en este mensaje. No la repitas: respóndele a la persona con lo que ya obtuviste.",
+            }
+            registrar("proponer_opciones", False, resultado)
+            return _json(resultado)
+        ctx.busquedas.add(firma)
+        capturado = _grupo(grupo)  # lo que la persona dijo de su turno: se guarda para la sesión
+        solicitud = {
+            "estudiante_id": sesion.estudiante_id,
+            "motivo": motivo,
+            "distrito": distrito,
+            "grupo": capturado or sesion.contexto.grupo or _grupo_por_horas(franjas),
+            "franjas": franjas,
+            "canales_aceptables": canales_aceptables,
+        }
+        if fecha:
+            solicitud["fecha"] = fecha
+        resultado = puerto.proponer(solicitud, k)
+        aviso_fecha = ""
+        if fecha and not resultado.get("opciones") and resultado.get("motivo_vacio") != "servicios_en_lote":
+            # Nada ese día: se buscan las fechas más cercanas con las mismas preferencias y se dice claro.
+            resultado = puerto.proponer({k_: v for k_, v in solicitud.items() if k_ != "fecha"}, k)
+            if resultado.get("opciones"):
+                aviso_fecha = (
+                    f"No hay cupos el {_fecha_texto(fecha)} con esas preferencias. Díselo con claridad y presenta estas, "
+                    "que son las fechas más cercanas; no digas que son de ese día."
+                )
+        sesion.lote_disponible = False
+        sesion.lote_solo_ideal = False
+        if resultado.get("motivo_vacio") == "servicios_en_lote":
+            # Los servicios compatibles están en modo lote: no hay opciones para elegir; se ofrece el lote.
+            sesion.ultima_solicitud = solicitud
+            sesion.propuestas = {}
+            sesion.desencuentro_registrado = False
+            sesion.lote_disponible = True
+            registrar("proponer_opciones", True, resultado)
+            lote = resultado["lote"]
+            return _json(
+                {
+                    "opciones": [],
+                    "motivo_vacio": "servicios_en_lote",
+                    "lote": {
+                        "servicios": lote["servicios"],
+                        "umbral_pct": lote["umbral_pct"],
+                        "cierra_solo_en_segundos": lote["ventana_s"],
+                        "solicitudes_esperando": lote["pendientes"],
+                    },
+                    "indicacion": (
+                        "Todo lo compatible está en servicios con ocupación alta, que se reparten por lote: un grupo "
+                        "de solicitudes se asigna en conjunto y el lote se cierra solo en unos segundos. Explícaselo en "
+                        "simple, aclara que el horario lo decide el lote y pregúntale si quiere entrar. Si acepta, usa "
+                        "`entrar_a_lote`."
+                    ),
+                }
+            )
+        if resultado.get("motivo_vacio") == "solicitud_invalida":
+            registrar("proponer_opciones", False, resultado)
+            return _json({"ok": False, "error": "solicitud_invalida", "detalle": resultado.get("detalle", "")})
+        if capturado:
+            sesion.contexto.grupo = capturado
+        sesion.contexto.distrito = distrito  # si cambió de distrito, queda para el resto de la conversación
+        sesion.ultima_solicitud = solicitud
+        sesion.servicio_ideal = resultado.get("servicio_ideal")
+        sesion.desencuentro_registrado = False
+        sesion.propuestas = {o["opcion_id"]: o for o in resultado["opciones"]}
+        registrar("proponer_opciones", True, resultado)
+        oferta_lote = None
+        if resultado["opciones"] and resultado.get("lote"):
+            # Lo directo son servicios alternativos; el servicio ideal sí tiene plazas, pero en lote. Quien quiera
+            # específicamente ese servicio puede entrar al lote (y entonces no se le asigna otro).
+            sesion.lote_disponible = True
+            sesion.lote_solo_ideal = True
+            lote = resultado["lote"]
+            oferta_lote = {
+                "servicios": lote["servicios"],
+                "umbral_pct": lote["umbral_pct"],
+                "cierra_solo_en_segundos": lote["ventana_s"],
+                "solicitudes_esperando": lote["pendientes"],
+            }
+        if not resultado["opciones"]:
+            return _json(
+                {
+                    "opciones": [],
+                    "motivo_vacio": resultado.get("motivo_vacio", "sin_cupos_compatibles"),
+                    "sugerencia": resultado.get(
+                        "sugerencia",
+                        "Ofrece ampliar días u horarios o aceptar otro canal; si no puede, registra el desencuentro.",
+                    ),
+                }
+            )
+        indicacion = aviso_fecha or (
+            "Muestra cada opción con su `texto`, numeradas, y pregunta cuál prefiere. Di siempre la fecha completa de cada una."
+        )
+        if oferta_lote:
+            indicacion += (
+                " Además, el servicio que mejor le conviene (" + ", ".join(oferta_lote["servicios"]) + ") tiene plazas pero "
+                "está muy ocupado y se reparte por LOTE (se asigna en conjunto y se cierra solo en unos segundos). Dile que "
+                "estas opciones son de otro servicio compatible y que, si prefiere específicamente ese, puede entrar al "
+                "lote (el día y la hora los decide el lote). Solo si dice que quiere el lote, usa `entrar_a_lote`."
+            )
+        datos = {"opciones": [_opcion_para_modelo(i, o) for i, o in enumerate(resultado["opciones"], 1)], "indicacion": indicacion}
+        if oferta_lote:
+            datos["lote"] = oferta_lote
+        return _json(datos)
+
+    def reservar_cita(numero: int) -> str:
+        opciones = list(sesion.propuestas.values())
+        if not 1 <= numero <= len(opciones):
+            resultado = {
+                "ok": False,
+                "error": "opcion_no_propuesta",
+                "detalle": f"No hay una opción {numero} en la última lista"
+                + (f" (van del 1 al {len(opciones)})." if opciones else "; primero busca opciones con proponer_opciones."),
+            }
+            registrar("reservar_cita", False, resultado)
+            return _json(resultado)
+        opcion_id = opciones[numero - 1]["opcion_id"]
+        resultado = puerto.reservar(sesion.estudiante_id, opcion_id, sesion.servicio_ideal)
+        registrar("reservar_cita", bool(resultado.get("ok")), resultado)
+        if not resultado.get("ok"):
+            if resultado.get("error") == "cupo_ya_tomado":
+                sesion.propuestas.pop(opcion_id, None)
+            return _json(
+                {"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")}
+            )
+        sesion.propuestas = {}
+        sesion.lote_disponible = False
+        return _json({"ok": True, "cita": _cita_para_modelo(resultado["cita"])})
+
+    def cancelar_cita(cita_id: str) -> str:
+        ultima = next(
+            (m.content for m in reversed(sesion.mensajes)
+             if m.type == "ai" and isinstance(m.content, str) and m.content and not getattr(m, "tool_calls", None)),
+            "",
+        )
+        if not entrada.confirma_cancelacion(ctx.mensaje, ultima):
+            resultado = {
+                "ok": False,
+                "error": "falta_confirmacion",
+                "detalle": "La persona no pidió cancelar la cita. Pregúntale si quiere que la cancelen y espera su respuesta.",
+            }
+            registrar("cancelar_cita", False, resultado)
+            return _json(resultado)
+        resultado = puerto.cancelar(cita_id.strip(), sesion.estudiante_id)
+        registrar("cancelar_cita", bool(resultado.get("ok")), resultado)
+        if not resultado.get("ok"):
+            return _json(
+                {"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")}
+            )
+        return _json({"ok": True, "cita": _cita_para_modelo(resultado["cita"])})
+
+    def listar_mis_citas() -> str:
+        citas = puerto.listar_citas(sesion.estudiante_id)
+        registrar("listar_mis_citas", True, {"citas": citas})
+        return _json({"citas": [_cita_para_modelo(c) for c in citas]})
+
+    def entrar_a_lote() -> str:
+        if not sesion.lote_disponible or sesion.ultima_solicitud is None:
+            resultado = {
+                "ok": False,
+                "error": "sin_oferta_de_lote",
+                "detalle": "Solo se entra al lote cuando proponer_opciones ofreció el lote (servicios_en_lote o `lote` junto a las opciones).",
+            }
+            registrar("entrar_a_lote", False, resultado)
+            return _json(resultado)
+        ultima = next(
+            (m.content for m in reversed(sesion.mensajes)
+             if m.type == "ai" and isinstance(m.content, str) and m.content and not getattr(m, "tool_calls", None)),
+            "",
+        )
+        if not entrada.acepta_lote(ctx.mensaje, ultima):
+            resultado = {
+                "ok": False,
+                "error": "falta_confirmacion",
+                "detalle": "La persona no aceptó entrar al lote. Pregúntale si quiere entrar y espera su respuesta.",
+            }
+            registrar("entrar_a_lote", False, resultado)
+            return _json(resultado)
+        # Si el lote se ofreció junto a opciones de otro servicio, quien entra quiere ese servicio y no otro.
+        solicitud = {**sesion.ultima_solicitud, **({"solo_servicio_ideal": True} if sesion.lote_solo_ideal else {})}
+        resultado = puerto.entrar_a_lote(solicitud, sesion.estudiante_id, sesion.id)
+        registrar("entrar_a_lote", bool(resultado.get("ok")), resultado)
+        if not resultado.get("ok"):
+            return _json({"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")})
+        sesion.lote_disponible = False
+        sesion.lote_id = resultado["lote"]["id"]
+        lote = resultado["lote"]
+        return _json(
+            {
+                "ok": True,
+                "lote": {"numero": lote["id"], "tu_posicion": lote["posicion"], "se_cierra_en": lote["cierra_en"]},
+                "indicacion": (
+                    "Quedó en el lote. Dile que el lote se cierra solo en unos segundos (o antes si se llena), que se "
+                    "asigna en conjunto y que le avisarás aquí con su cita; no prometas día ni hora."
+                ),
+            }
+        )
+
+    def avisarme_si_hay_cupo() -> str:
+        if sesion.ultima_solicitud is None or (sesion.propuestas and not sesion.desencuentro_registrado):
+            resultado = {
+                "ok": False,
+                "error": "sin_busqueda_sin_cupo",
+                "detalle": "Solo se anota a la persona cuando la última búsqueda no tuvo opciones (o rechazó todas).",
+            }
+            registrar("avisarme_si_hay_cupo", False, resultado)
+            return _json(resultado)
+        ultima = next(
+            (m.content for m in reversed(sesion.mensajes)
+             if m.type == "ai" and isinstance(m.content, str) and m.content and not getattr(m, "tool_calls", None)),
+            "",
+        )
+        if not entrada.acepta_aviso(ctx.mensaje, ultima):
+            resultado = {
+                "ok": False,
+                "error": "falta_confirmacion",
+                "detalle": "La persona no pidió que le avises. Pregúntale si quiere que le avises aquí si se libera un cupo y espera su respuesta.",
+            }
+            registrar("avisarme_si_hay_cupo", False, resultado)
+            return _json(resultado)
+        resultado = puerto.anotar_lista_espera(sesion.ultima_solicitud, sesion.estudiante_id, sesion.id)
+        registrar("avisarme_si_hay_cupo", bool(resultado.get("ok")), resultado)
+        if not resultado.get("ok"):
+            return _json({"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")})
+        return _json(
+            {
+                "ok": True,
+                "indicacion": (
+                    "Quedó en la lista de espera. Dile que si se libera un cupo compatible le avisarás aquí mismo con la "
+                    "opción lista para reservar; no prometas día ni hora, ni que lo conseguirá."
+                ),
+            }
+        )
+
+    def consultar_asistencia() -> str:
+        textos = [m.content for m in sesion.mensajes if m.type == "human" and isinstance(m.content, str)]
+        if not any(entrada.menciona_asistencia(t) for t in textos + [ctx.mensaje]):
+            resultado = {
+                "ok": False,
+                "error": "no_pidio_asistencia",
+                "detalle": "La persona no habló de su asistencia a clases. No consultes ese dato por tu cuenta.",
+            }
+            registrar("consultar_asistencia", False, resultado)
+            return _json(resultado)
+        resultado = puerto.asistencia(sesion.estudiante_id)
+        registrar("consultar_asistencia", bool(resultado.get("ok")), resultado)
+        if not resultado.get("ok"):
+            return _json({"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")})
+        return _json(
+            {
+                "periodo": resultado["periodo"],
+                "asistencia_actual": _pct(resultado["asistencia_actual"]),
+                "asistencia_periodo_anterior": _pct(resultado["asistencia_periodo_anterior"]),
+                "cambio_puntos": round(100 * resultado["variacion"]),
+                "minimo_requerido": _pct(resultado["minimo_requerido"]),
+                "cursos": [
+                    {
+                        "curso": c["curso"],
+                        "asistencia": _pct(c["tasa"]),
+                        "faltas": c["faltas"],
+                        "de_sesiones": c["sesiones"],
+                        "bajo_el_minimo": c["bajo_minimo"],
+                    }
+                    for c in resultado["cursos"]
+                ],
+                "indicacion": (
+                    "Cuéntale sus cifras en simple (las de este período, cómo van frente al período anterior y qué "
+                    "cursos están bajo el mínimo). No interpretes ni diagnostiques, no hables de riesgo ni de avisos, y "
+                    "no tienes acceso a sus notas. Si le preocupa o le pesa, ofrécele buscarle una cita de bienestar."
+                ),
+            }
+        )
+
+    def registrar_desencuentro() -> str:
+        if sesion.ultima_solicitud is None:
+            return _json(
+                {"ok": False, "error": "sin_busqueda_previa", "detalle": "Primero busca opciones con proponer_opciones."}
+            )
+        if sesion.desencuentro_registrado:
+            return _json({"ok": True, "detalle": "Ya estaba registrado para esta búsqueda."})
+        resultado = puerto.registrar_desencuentro(sesion.ultima_solicitud)
+        registrar("registrar_desencuentro", bool(resultado.get("ok")), resultado)
+        if resultado.get("ok"):
+            sesion.desencuentro_registrado = True
+            resultado = {
+                **resultado,
+                "indicacion": (
+                    "Díselo con honestidad y pregúntale si quiere que le avises aquí si se libera un cupo compatible. "
+                    "Solo si dice que sí, usa `avisarme_si_hay_cupo`."
+                ),
+            }
+        return _json(resultado)
+
+    return [
+        StructuredTool.from_function(
+            func=proponer_opciones,
+            name="proponer_opciones",
+            description=(
+                "Busca citas compatibles con lo que la persona necesita y devuelve hasta k opciones ordenadas "
+                "de mejor a peor. No reserva nada. Úsala en cuanto tengas motivo, días/horas y canal."
+            ),
+            args_schema=ProponerArgs,
+        ),
+        StructuredTool.from_function(
+            func=reservar_cita,
+            name="reservar_cita",
+            description=(
+                "Reserva la opción que la persona eligió de la última lista mostrada, por su número. Úsala SOLO tras "
+                "una elección clara. Devuelve el comprobante de la cita o un error."
+            ),
+            args_schema=ReservarArgs,
+        ),
+        StructuredTool.from_function(
+            func=cancelar_cita,
+            name="cancelar_cita",
+            description="Cancela una cita de la persona y libera el cupo. Confirma con ella antes de usarla.",
+            args_schema=CancelarArgs,
+        ),
+        StructuredTool.from_function(
+            func=listar_mis_citas,
+            name="listar_mis_citas",
+            description="Lista las citas de la persona (número, fecha, hora, estado). Úsala para ver o cancelar citas.",
+            args_schema=SinArgs,
+        ),
+        StructuredTool.from_function(
+            func=entrar_a_lote,
+            name="entrar_a_lote",
+            description=(
+                "Pone a la persona en el lote de asignación conjunta. Úsala SOLO después de que proponer_opciones "
+                "ofreció el lote (servicios_en_lote, o `lote` junto a las opciones) y la persona aceptó entrar."
+            ),
+            args_schema=SinArgs,
+        ),
+        StructuredTool.from_function(
+            func=avisarme_si_hay_cupo,
+            name="avisarme_si_hay_cupo",
+            description=(
+                "Anota a la persona en la lista de espera con su última búsqueda para avisarle aquí si se libera un cupo "
+                "compatible. Úsala SOLO cuando no hubo opciones (o rechazó todas) y la persona aceptó que le avises."
+            ),
+            args_schema=SinArgs,
+        ),
+        StructuredTool.from_function(
+            func=consultar_asistencia,
+            name="consultar_asistencia",
+            description=(
+                "Consulta la asistencia a clases de la persona (este período, el anterior y por curso). Solo lectura y "
+                "solo asistencia: no hay notas. Úsala únicamente si la persona habló de su asistencia o de sus faltas."
+            ),
+            args_schema=SinArgs,
+        ),
+        StructuredTool.from_function(
+            func=registrar_desencuentro,
+            name="registrar_desencuentro",
+            description=(
+                "Avisa al equipo de coordinación que la última búsqueda no tuvo ninguna opción que sirviera. "
+                "Úsala solo cuando no hay opciones y la persona no puede cambiar días, horas ni canal, o rechazó todas."
+            ),
+            args_schema=SinArgs,
+        ),
+    ]

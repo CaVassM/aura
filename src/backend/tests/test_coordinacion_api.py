@@ -249,8 +249,8 @@ def test_reglas(client, estado_sembrado):
     assert r["aviso"]["solo_semanas_evaluacion"] is True and len(r["aviso"]["senales"]) == 4
     # Nada en inglés a la vista: los valores técnicos se traducen.
     s1 = r["aviso"]["senales"][0]
-    assert s1["umbral"] == ["medium", "high"] and s1["umbral_texto"] == "media o alta"
-    assert "dropout_alert" not in s1["descripcion"] and "media o alta" in s1["descripcion"]
+    assert s1["nombre"] == "Temporada de evaluación" and s1["umbral_texto"] == "una semana de evaluaciones"
+    assert "evaluation_week" not in s1["descripcion"] and "una semana de evaluaciones" in s1["descripcion"]
     textos = " ".join(f'{s["descripcion"]} {s["umbral_texto"]}' for s in r["aviso"]["senales"])
     assert not any(w in textos for w in ("medium", "high", "low", "grade_change"))
     assert r["afinidad"]["minimo_alternativa"] == estado_sembrado.parametros["umbral_afinidad"]

@@ -59,6 +59,9 @@ el tamaño real se indica en cada caso). Prefijo común: `/api`. Esquemas comple
 | GET | `/api/coordinacion/servicios/{service_id}?semana=` | Detalle de un servicio |
 | GET | `/api/coordinacion/desencuentros?motivo=&distrito=&servicio_ideal=&grupo=&pagina=&tamano=` | Tabla, matriz distrito × servicio, franja principal e insight |
 | GET | `/api/coordinacion/desencuentros.csv` | Los mismos filtros, sin paginar |
+| GET | `/api/coordinacion/lotes` | Modo lote: servicios por utilización, lote abierto con cuenta regresiva e historial |
+| GET | `/api/coordinacion/actividad?desde=&limite=` | Registro de lo **nuevo** (citas reservadas o canceladas y desencuentros hechos después de arrancar la demo) |
+| GET | `/api/coordinacion/actividad/stream?desde=` | Lo mismo en **tiempo real** (Server-Sent Events) |
 | GET | `/api/coordinacion/reglas` | Reglas del motor en solo lectura |
 
 ## GET /api/demo/estado
@@ -565,10 +568,10 @@ Cinco bloques en solo lectura; los valores técnicos de los datos llegan traduci
     "senales": [
       {
         "id": "S1",
-        "nombre": "Alerta de abandono",
-        "descripcion": "La alerta de abandono es media o alta.",
-        "umbral": ["medium", "high"],
-        "umbral_texto": "media o alta"
+        "nombre": "Temporada de evaluación",
+        "descripcion": "Hoy cae en una semana de evaluaciones del calendario académico (D7).",
+        "umbral": "evaluation_week",
+        "umbral_texto": "una semana de evaluaciones"
       },
       {
         "id": "S2",
@@ -722,3 +725,53 @@ Un segundo intento sobre la misma opción responde 409 `{   "error": "cupo_ya_to
 - Los textos de los ⓘ viven en `lib/glosario.ts` y se rellenan con `/api/demo/estado`; el embudo de cupos usa los 4 campos por servicio.
 - Reinicio: botón «Reiniciar demo» → `POST /api/demo/reiniciar` y recargar.
 - Los endpoints del estudiante pasaron a snake_case.
+
+
+## Actividad en vivo
+
+Para mostrar en pantalla, al mismo tiempo, lo que hace un estudiante y lo que ve Coordinación. **Solo registra lo nuevo**: lo que llega por la API de citas o por el chat después de arrancar. Las citas y desencuentros sembrados de la demo no aparecen. Todo vive en RAM: reiniciar el backend o la demo vacía el registro.
+
+`GET /api/coordinacion/actividad?desde=0&limite=200` → `{ "epoca", "ultimo_id", "eventos": [...] }`, del más antiguo al más reciente. `desde` devuelve solo los eventos con id mayor.
+
+Cada evento:
+
+| Campo | Descripción |
+|---|---|
+| `id` | Entero creciente; sirve como cursor |
+| `tipo` | `cita_reservada`, `cita_cancelada`, `desencuentro`, `servicio_en_lote` / `servicio_sale_de_lote` (un servicio cruzó el umbral), `lote_abierto`, `lote_solicitud` o `lote_resuelto` |
+| `registrado_en` | Instante real del registro (ISO, UTC) |
+| `fecha_solicitud` | Fecha **simulada** de la demo en que ocurrió (`hoy`) |
+| `origen` | `chat` (agente AURA), `api` o `lote` (citas que asigna un lote) |
+| `estudiante_id` | Quién (null en eventos del sistema: umbral, lote resuelto) |
+| `servicio` | `{service_id, nombre, tipo, tipo_label, distrito}` (null en desencuentros) |
+| `ocupacion` | `{pct, antes_pct, reservados, liberados, nivel, en_lote}` del servicio **tras** el evento: cupos reservados / liberados de la agenda abierta (null en desencuentros) |
+| `cita` | `{cita_id, fecha, hora_inicio, hora_fin, canal, canal_label, dias_espera, es_alternativa}` (null en desencuentros) |
+| `lote` | `{id, estado, solicitudes, tamano_maximo, ventana_s, cierra_en, resultado}` (eventos de lote; `resultado` solo al resolverse) |
+| `umbral_pct` | Umbral de modo lote (solo en `servicio_en_lote` / `servicio_sale_de_lote`) |
+| `desencuentro` | `{registro_id, motivo, motivo_label, servicio_ideal, servicio_ideal_label, distrito, grupo, grupo_label, franjas, canales}` (solo desencuentros) |
+
+`GET /api/coordinacion/actividad/stream?desde=<ultimo_id>` es un `text/event-stream`:
+
+- `event: inicio` al conectar: `{epoca, ultimo_id, reinicio}` (`reinicio: true` si el cliente venía de otra ejecución: debe vaciar su lista).
+- `event: actividad` (con `id:`) por cada evento nuevo, con el JSON de arriba.
+- `event: reinicio` si se reinicia la demo con el flujo abierto.
+- Un comentario `: ping` cada 15 s para mantener la conexión.
+
+`EventSource` reconecta solo y reenvía `Last-Event-ID`; el servidor no repite lo ya entregado. El frontend (`components/coordinacion/ActividadProvider.tsx`) carga primero `GET /actividad` y luego abre el flujo con `desde=ultimo_id`.
+
+
+## Modo lote
+
+`GET /api/coordinacion/lotes` → todo lo que muestra la pantalla **Lotes**. Reglas completas: [como_funciona.md §8](como_funciona.md).
+
+| Campo | Descripción |
+|---|---|
+| `umbral_pct`, `ventana_s`, `tamano_maximo` | Parámetros del modo lote (75 %, 30 s, 5 por defecto) |
+| `servidor_ahora` | Hora del servidor (ISO UTC): la cuenta regresiva se calcula con ella, sin depender del reloj del navegador |
+| `servicios[]` | Los 15 servicios, de mayor a menor utilización: `{service_id, nombre, tipo, tipo_label, distrito, pct, reservados, liberados, en_lote}` |
+| `abierto` | El lote que espera solicitudes (o `null`): `{id, estado, abierto_en, cierra_en, solicitudes[], resultado: null}` |
+| `historial[]` | Lotes resueltos, el más reciente primero. `resultado`: `{asignados, sin_cupo, tiempo_s, poblacion, generaciones, genetico, llegada, mejora_sobre_llegada, asignaciones[], sin_cupo_estudiantes[]}` |
+
+`resultado.genetico` y `resultado.llegada` traen las mismas métricas (`objetivo`, `asignados`, `desencuentros`, `espera_media`, `espera_diurnos`, `espera_nocturnos`, `z`) para el mismo grupo asignado con el genético y por orden de llegada. Cada `asignaciones[]` incluye `orden_asignacion` (la prioridad que le dio el genético) y `posicion_llegada`.
+
+El lote se cierra solo; los cambios llegan por el flujo de actividad (`lote_abierto`, `lote_solicitud`, `lote_resuelto`, `servicio_en_lote`): la pantalla vuelve a pedir este endpoint con cada uno.

@@ -1,44 +1,13 @@
 """Implementación de las cuatro funciones que el agente puede invocar."""
 
-from datetime import date, time
+from datetime import date
 
-from ..motor.datos import Franja, Solicitud
+from ..motor.datos import Solicitud
 from ..motor.costo import mejores_opciones
-from .configuracion import cargar_yaml
+from . import validacion
 from .estado_agenda import AgendaViva
 
-_DIAS = {
-    "mon": 0,
-    "monday": 0,
-    "lun": 0,
-    "lunes": 0,
-    "tue": 1,
-    "tuesday": 1,
-    "mar": 1,
-    "martes": 1,
-    "wed": 2,
-    "wednesday": 2,
-    "mie": 2,
-    "miércoles": 2,
-    "miercoles": 2,
-    "thu": 3,
-    "thursday": 3,
-    "jue": 3,
-    "jueves": 3,
-    "fri": 4,
-    "friday": 4,
-    "vie": 4,
-    "viernes": 4,
-    "sat": 5,
-    "saturday": 5,
-    "sab": 5,
-    "sábado": 5,
-    "sabado": 5,
-    "sun": 6,
-    "sunday": 6,
-    "dom": 6,
-    "domingo": 6,
-}
+K_MAXIMO = 20
 
 
 class HerramientasAgente:
@@ -47,7 +16,7 @@ class HerramientasAgente:
     def __init__(self, agenda: AgendaViva | None = None):
         self.agenda = agenda or AgendaViva()
 
-    def ejecutar(self, nombre: str, argumentos: dict) -> dict:
+    def ejecutar(self, nombre: str, argumentos: dict | str | None) -> dict:
         """Despacha una llamada de tool calling por nombre; los errores se devuelven como JSON."""
         accion = {
             "proponer_opciones": self.proponer_opciones,
@@ -58,35 +27,65 @@ class HerramientasAgente:
         if accion is None:
             return {"ok": False, "error": "herramienta_desconocida", "detalle": nombre}
         try:
+            argumentos = validacion.como_diccionario(argumentos or {}, "argumentos")
             return accion(**argumentos)
-        except TypeError as error:
+        except (TypeError, ValueError) as error:
             return {"ok": False, "error": "argumentos_invalidos", "detalle": str(error)}
 
     def convertir_solicitud(self, entrada: dict) -> tuple[Solicitud, str]:
         """Valida preferencias JSON y traduce el motivo usando tablas.yaml."""
-        return _convertir_solicitud(entrada, self.agenda.hoy)
+        distritos = {servicio.distrito for servicio in self.agenda.servicios}
+        return validacion.convertir_solicitud(
+            entrada, self.agenda.hoy, self.agenda.tablas, distritos
+        )
 
-    def proponer_opciones(self, solicitud: dict, k: int = 3) -> dict:
-        """Devuelve hasta k propuestas válidas y disponibles, sin reservarlas."""
+    def proponer_opciones(self, solicitud: dict, k: int = 3, excluir_servicios=None) -> dict:
+        """Devuelve hasta k propuestas válidas y disponibles, sin reservarlas.
+
+        `excluir_servicios` aparta los cupos de esos servicios (los que están en modo lote)."""
         try:
             modelo, tipo_ideal = self.convertir_solicitud(solicitud)
-        except (KeyError, ValueError) as error:
+            k = min(max(1, int(k)), K_MAXIMO)
+            pedido = validacion.como_diccionario(solicitud, "solicitud")
+            fecha = date.fromisoformat(str(pedido["fecha"])) if pedido.get("fecha") else None
+        except (KeyError, ValueError, TypeError) as error:
             return {
                 "opciones": [],
                 "motivo_vacio": "solicitud_invalida",
                 "detalle": str(error),
             }
-        mejores = self._mejores(modelo, k)
+        # Un servicio puede tener varios cupos a la misma hora: para la persona son la misma opción. Se buscan
+        # de más y se muestra una sola por (servicio, fecha, hora, canal); al reservar se toma el cupo que quede.
+        # `fecha` (opcional) limita las opciones a ese día concreto; las franjas siguen mandando el día de la semana.
+        candidatas = self._mejores(modelo, k * 10 if fecha is None else 2000, excluir=frozenset(excluir_servicios or ()))
+        mejores, vistas = [], set()
+        for op in candidatas:
+            cupo = self.agenda.cupo_por_id[op.cupo_id]
+            if fecha is not None and cupo.fecha != fecha:
+                continue
+            clave = (cupo.service_id, cupo.fecha, cupo.hora_inicio, op.canal)
+            if clave in vistas:
+                continue
+            vistas.add(clave)
+            mejores.append(op)
+            if len(mejores) == k:
+                break
         if not mejores:
             return {
                 "opciones": [],
                 "motivo_vacio": "sin_cupos_compatibles",
                 "servicio_ideal": tipo_ideal,
+                "sugerencia": (
+                    "No hay cupos con estas preferencias. Puedes ofrecer ampliar los días u horarios, "
+                    "aceptar otro canal, o registrar el desencuentro si la persona no puede cambiar nada."
+                ),
             }
         opciones = [self._formatear_opcion(op, tipo_ideal) for op in mejores]
         return {"opciones": opciones, "servicio_ideal": tipo_ideal}
 
-    def _mejores(self, modelo: Solicitud, k: int, referencia: date | None = None) -> list:
+    def _mejores(
+        self, modelo: Solicitud, k: int, referencia: date | None = None, excluir: frozenset = frozenset()
+    ) -> list:
         """Hasta k opciones válidas y libres de menor costo para la solicitud.
 
         `referencia` es la fecha desde la cual se cuentan cupos y espera (por defecto, hoy).
@@ -96,7 +95,7 @@ class HerramientasAgente:
         return mejores_opciones(
             modelo,
             agenda.opciones_validas(modelo, referencia),
-            agenda.cupos_ocupados(),
+            agenda.cupos_ocupados() | agenda.cupos_de_servicios(excluir),
             max(0, int(k)),
             cupos_por_id=agenda.cupo_por_id,
             hoy=referencia,
@@ -130,6 +129,7 @@ class HerramientasAgente:
         agenda = self.agenda
         cupo = agenda.cupo_por_id[opcion.cupo_id]
         servicio = agenda.servicio_por_id[cupo.service_id]
+        etiquetas = agenda.tablas["etiquetas"]
         return {
             "opcion_id": f"{cupo.id}|{opcion.canal}",
             "service_id": cupo.service_id,
@@ -137,9 +137,11 @@ class HerramientasAgente:
             "tipo": cupo.tipo,
             "distrito": cupo.distrito,
             "fecha": cupo.fecha.isoformat(),
+            "dia_semana": etiquetas["dias_semana_largo"][cupo.fecha.weekday()],
             "hora_inicio": cupo.hora_inicio.isoformat(timespec="minutes"),
             "hora_fin": cupo.hora_fin.isoformat(timespec="minutes"),
             "canal": opcion.canal,
+            "canal_label": etiquetas["canal"].get(opcion.canal, opcion.canal),
             "dias_espera": (cupo.fecha - agenda.hoy).days,
             "es_alternativa": cupo.tipo != tipo_ideal,
             "afinidad": opcion.afinidad,
@@ -154,15 +156,18 @@ class HerramientasAgente:
         """
         return self.agenda.reservar(estudiante_id, opcion_id, servicio_ideal=servicio_ideal)
 
-    def cancelar_cita(self, cita_id: str) -> dict:
-        """Cancela una cita viva y vuelve a liberar su cupo."""
-        return self.agenda.cancelar(cita_id)
+    def cancelar_cita(self, cita_id: str, estudiante_id: str | None = None) -> dict:
+        """Cancela una cita viva y vuelve a liberar su cupo.
+
+        Con `estudiante_id`, solo la puede cancelar su dueño (otra persona recibe `cita_no_encontrada`).
+        """
+        return self.agenda.cancelar(cita_id, estudiante_id)
 
     def registrar_desencuentro(self, solicitud: dict) -> dict:
         """Guarda en RAM una solicitud sin opciones compatibles para su análisis operativo."""
         try:
             modelo, _ = self.convertir_solicitud(solicitud)
-        except (KeyError, ValueError) as error:
+        except (KeyError, ValueError, TypeError) as error:
             return {"ok": False, "error": "solicitud_invalida", "detalle": str(error)}
         fila = self.agenda.registrar_desencuentro(self._registro(modelo))
         return {"ok": True, "registro_id": fila["registro_id"]}
@@ -187,36 +192,3 @@ class HerramientasAgente:
             "grupo": modelo.grupo,
             "fecha": modelo.fecha_solicitud.isoformat(),
         }
-
-
-def _convertir_solicitud(entrada: dict, hoy: date) -> tuple[Solicitud, str]:
-    """Valida preferencias JSON y traduce el motivo usando tablas.yaml."""
-    tablas = cargar_yaml("tablas.yaml")
-    motivo = str(entrada.get("motivo", "")).strip()
-    tipo_ideal = tablas["motivo_a_servicio"].get(motivo)
-    if tipo_ideal is None:
-        raise ValueError(f"Motivo no configurado: {motivo}")
-    franjas = []
-    for franja in entrada.get("franjas", []):
-        dia = franja["dia"]
-        indice = int(dia) if str(dia).isdigit() else _DIAS[str(dia).lower()]
-        franjas.append(
-            Franja(
-                indice,
-                time.fromisoformat(franja["desde"]),
-                time.fromisoformat(franja["hasta"]),
-            )
-        )
-    if not franjas:
-        raise ValueError("La solicitud debe incluir al menos una franja horaria")
-    solicitud = Solicitud(
-        str(entrada["estudiante_id"]),
-        tipo_ideal,
-        str(entrada["distrito"]),
-        tuple(franjas),
-        tuple(entrada["canales_aceptables"]),
-        date.fromisoformat(entrada.get("fecha_solicitud", hoy.isoformat())),
-        str(entrada.get("grupo", "diurno")),
-        motivo,
-    )
-    return solicitud, tipo_ideal

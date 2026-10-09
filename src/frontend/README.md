@@ -1,20 +1,16 @@
 # AURA — Frontend (Entregable 2)
 
-Réplica funcional de tu prototipo de Figma: landing → campus virtual del
-estudiante → chat con AURA → panel de coordinación de la red. Todo corre hoy
-con datos simulados (mock) para que lo puedas mostrar funcionando sin
-esperar al backend de Camilo; está armado para que conectar el backend real
-sea cambiar un solo archivo (`lib/api.ts`).
+Landing → campus virtual del estudiante → chat con AURA → panel de coordinación de la red. **Todo
+usa el backend real** (`src/backend`, FastAPI) a través de `lib/api.ts`:
 
-> **Coordinación ya usa el backend real.** Las cuatro pantallas de `/coordinacion`
-> (Resumen, Mapa de servicios, Servicios, Desencuentros y Reglas) leen de la API FastAPI de
-> `src/backend` a través de `lib/api.ts` (tipos en `lib/types-coordinacion.ts`).
-> Para verlas hay que levantar el backend (`uvicorn app.main:app --port 8080` en
-> `src/backend`) y definir `NEXT_PUBLIC_API_URL` en `.env.local`; si el backend no
-> responde, el panel muestra un mensaje de error con botón «Reintentar». El
-> contrato está en `src/backend/docs/api_coordinacion.md`. La vista del estudiante
-> (campus y chat) sigue con datos simulados; sus endpoints del backend usan
-> snake_case, así que habrá que adaptar `lib/api.ts` y `lib/types.ts` al conectarla.
+- **Coordinación** (`/coordinacion`): contrato en `src/backend/docs/api_coordinacion.md`.
+- **Estudiante** (`/campus/chat`, `/campus/citas`, y `/campus/cursos|calificaciones|calendario` con datos académicos simulados + calendario D7): el chat habla con el agente conversacional
+  (LangChain + Ollama) y las citas son las del backend. Contrato en `src/backend/docs/api_agente.md`.
+  Hace falta el backend corriendo y `ollama serve` con el modelo descargado; si el backend no responde,
+  las pantallas muestran un mensaje claro y la conversación explica qué falta.
+
+> **Todo vive en RAM en el backend.** Si se reinicia (o se pulsa «Reiniciar demo» en Coordinación) se
+> pierden citas y conversaciones; el chat lo detecta y empieza una conversación nueva sin romperse.
 
 ## 1. Instalar y correr
 
@@ -41,8 +37,7 @@ exacto. Dos cosas que no puedo garantizar sin el archivo real de Figma:
 - **La tipografía.** Usé "Plus Jakarta Sans" (Google Fonts, gratis) porque
   se parece mucho a la de tus capturas, pero si tu equipo ya eligió otra
   fuente puntual, solo se cambia en `app/layout.tsx` (una línea).
-- **Las pantallas que no mandaste capturas.** "Mis cursos",
-  "Calificaciones", "Calendario", "Mapa de servicios", "Desencuentros" y
+- **Las pantallas que no mandaste capturas.** "Mapa de servicios", "Desencuentros" y
   "Reglas" existen como placeholders (dicen honestamente "fuera del
   alcance de este entregable") para que ningún link del sidebar se sienta
   roto si lo clickeas en el video — pero no inventé un diseño para ellas
@@ -52,61 +47,99 @@ exacto. Dos cosas que no puedo garantizar sin el archivo real de Figma:
 
 ```
 app/
-├── page.tsx                      landing (captura 1)
+├── page.tsx                      landing
 ├── campus/
-│   ├── page.tsx                   Inicio (captura 2)
-│   ├── chat/page.tsx               Conversar con AURA (captura 3)
-│   ├── citas/page.tsx              Mis citas (nueva — lista lo agendado)
-│   └── cursos|calificaciones|calendario/   placeholders
-└── coordinacion/
-    ├── page.tsx                   Resumen de red (captura 4)
-    └── mapa|desencuentros|reglas/  placeholders
+│   ├── layout.tsx                 PerfilProvider: el estudiante activo de la demo
+│   ├── page.tsx                   Inicio
+│   ├── chat/page.tsx              Conversar con AURA (agente real)
+│   ├── citas/page.tsx             Mis citas (del backend; se pueden cancelar)
+│   ├── cursos/page.tsx            Mis cursos (período D7, asistencia, horario semanal; datos simulados)
+│   ├── calificaciones/page.tsx    Notas por curso, promedio y nota necesaria para aprobar
+│   └── calendario/page.tsx        Calendario D7 + clases, evaluaciones y mis citas
+└── coordinacion/                 panel de la red (usa el backend); en-vivo/ = citas nuevas en tiempo real (SSE)
 
 components/
-├── PortalShell.tsx        layout compartido: sidebar + topbar
-├── campus/                nav e identidad del campus virtual
-├── coordinacion/          nav e identidad del panel de coordinación
-├── chat/                  burbuja, tarjeta de servicio, selector de horario
-└── ui/                    Tag, StatCard, Placeholder (piezas chicas reusadas)
+├── PortalShell.tsx        marco del campus (barra teal, mismo estilo que Coordinación)
+├── campus/                nav, PerfilProvider y selector de estudiante (TopbarControls)
+│   └── academico/         anillo, cuenta animada y colores por curso de Mis cursos, Calificaciones y Calendario
+├── coordinacion/          todo el panel de Coordinación
+├── chat/                  burbujas, tarjetas de opciones, comprobante de cita, «escribiendo…»
+└── ui/                    Tag, StatCard, Placeholder, Estados
 
 lib/
-├── types.ts    los "contratos" de datos
-└── api.ts       TODO lo que hoy simula el backend vive aquí
+├── api.ts            ÚNICO lugar con fetch: chat, citas y Coordinación
+├── types.ts          tipos del estudiante (snake_case, como el backend)
+├── perfiles.ts       los estudiantes de la demo (ver abajo)
+└── servicios-ui.ts   color, ícono y etiqueta de cada tipo de servicio y canal
 ```
 
-`PortalShell` es la pieza más importante para que entiendas rápido el
-proyecto: es el componente que dibuja el sidebar y el topbar (iguales en
-estructura entre campus y coordinación, pero con colores/íconos/links
-distintos). Cada página solo le pasa qué mostrar — no repito el sidebar
-copiado y pegado en cada archivo.
+La regla de oro: **los componentes nunca llaman a `fetch` directamente**, siempre pasan por una función
+de `lib/api.ts`.
 
-La regla de oro sigue siendo la misma que la vez pasada: **los componentes
-nunca llaman a `fetch` directamente**, siempre pasan por una función de
-`lib/api.ts`. Hoy esas funciones simulan el backend; el día que Camilo
-exponga los endpoints reales, abres ese archivo y cambias el cuerpo de cada
-función por un `fetch()` — no tocas ni un componente. Ahí mismo dejé
-comentado un ejemplo completo de cómo se vería.
+### Estudiantes de la demo
 
-## 4. Endpoints a acordar con Camilo y Leo
+`lib/perfiles.ts` define los perfiles (ciudad ficticia de Aethera). El selector «Demo · Lucía» de la barra
+superior cambia de estudiante de verdad: cada uno tiene su chat y sus citas en el backend. Lo que se envía:
 
-| Endpoint | Método | Para qué | Función en `lib/api.ts` |
-|---|---|---|---|
-| `/api/chat` | `POST` | Manda el mensaje del estudiante, recibe la respuesta del agente y, si aplica, servicios sugeridos | `sendMessage()` |
-| `/api/services/:id/slots` | `GET` | Horarios disponibles de un servicio | `getAvailableSlots()` |
-| `/api/appointments` | `POST` | Crea la cita | `bookAppointment()` |
-| `/api/appointments` | `GET` | Lista las citas del estudiante (para "Mis citas") | `getMyAppointments()` |
-| `/api/network/summary` | `GET` | Estadísticas y ocupación por servicio para el panel de coordinación | `getNetworkSummary()` |
+| Campo del perfil | Va al backend como | Notas |
+|---|---|---|
+| `id` (`STU_DEMO_###`) | `estudiante_id` | No choca con los ids de los datos (`STU_AE_######`) |
+| `distrito` (uno de los 5 de D6) | `distrito` en `POST /api/chat` | Distrito donde vive; se usa para citas presenciales. En la conversación se puede cambiar |
+| — | — | El turno diurno/nocturno **no** es parte del perfil: el agente lo toma de lo que la persona cuente |
 
-`lib/types.ts` tiene la forma exacta de cada dato. Pásaselo a Camilo tal
-cual — es la forma más rápida de que el JSON que arma el backend calce sin
-ida y vuelta.
+Para agregar un perfil basta añadir un objeto a `PERFILES`.
 
-## 5. Conectar el backend real
+### En vivo (para el video con dos pantallas)
 
-1. Copia `.env.local.example` a `.env.local` y pon ahí la URL real.
-2. En `lib/api.ts`, reemplaza el cuerpo de cada función por un `fetch()` a
-   `` `${process.env.NEXT_PUBLIC_API_URL}/api/...` ``.
-3. `npm run dev` de nuevo y pruebas contra el backend real.
+`/coordinacion/en-vivo` muestra, al instante y sin recargar, cada cita que un estudiante reserva o cancela
+y cada solicitud sin cupo que registra el agente. Además aparece un aviso emergente en cualquier pantalla
+de Coordinación, la insignia de «En vivo» en la barra lateral cuenta lo no visto y los números del panel
+(citas agendadas, ocupación) se actualizan solos. Solo registra lo **nuevo**: las citas sembradas no
+aparecen. Detalle del contrato: `src/backend/docs/api_coordinacion.md` (sección «Actividad en vivo»).
+
+Para grabarlo: `/campus/chat` en una ventana (como cualquier perfil del selector) y `/coordinacion` en otra.
+
+### Modo lote
+
+Cuando un servicio llega al 75 % de utilización, sus cupos solo se reparten por **lote** (se cierra solo y asigna
+con el algoritmo genético; reglas en `src/backend/docs/como_funciona.md` §8).
+
+- **Coordinación → Lotes** (`/coordinacion/lotes`): los 15 servicios con la marca del 75 %, el lote abierto con su
+  cuenta regresiva y las solicitudes que lleva, y el historial con la comparación genético vs orden de llegada.
+  «En vivo» muestra también cuándo un servicio cruza el umbral y cada novedad del lote.
+- **Estudiante** (`/campus/chat`): si todo lo compatible está en modo lote, el chat muestra una tarjeta con el botón
+  «Entrar al lote»; al aceptar aparece un anillo con la cuenta regresiva y, cuando el lote se cierra, la cita llega
+  sola al chat (y a «Mis citas») por el flujo de avisos, sin enviar ningún mensaje.
+
+Para el video: abre `/campus/chat` en dos ventanas (como dos perfiles del selector) y `/coordinacion/lotes` en otra.
+
+### Cómo se ve el chat
+
+- Al abrir, AURA saluda y avisa qué distrito usa; hay sugerencias para empezar.
+- Cuando el agente propone citas, salen como **tarjetas** (color por tipo de servicio). Al tocar una se le
+  responde «quiero la opción N» al agente, que es quien reserva. La tarjeta no reserva por sí sola.
+- Una cita reservada aparece como comprobante; una cancelada, como aviso. Un mensaje de crisis se destaca.
+- Paleta y animaciones: las mismas `co.*` del panel de Coordinación (`tailwind.config.ts`); las animaciones
+  respetan `prefers-reduced-motion`.
+
+## 4. Endpoints que usa el estudiante
+
+| Endpoint | Método | Función en `lib/api.ts` |
+|---|---|---|
+| `/api/chat` | `POST` | `chatEnviar()` |
+| `/api/chat/{session_id}?estudiante_id=` | `GET` / `DELETE` | `chatHistorial()` / `chatReiniciar()` |
+| `/api/appointments?estudiante_id=` | `GET` | `getMisCitas()` |
+| `/api/appointments/{id}?estudiante_id=` | `DELETE` | `cancelarCita()` |
+| `/api/demo/estado` | `GET` | `getDemoEstado()` (fecha simulada en Inicio) |
+
+Parámetros y respuestas: `src/backend/docs/api_agente.md`.
+
+## 5. Conectar el backend
+
+1. Copia `.env.local.example` a `.env.local` (por defecto `http://localhost:8080`).
+2. Backend: `uvicorn app.main:app --port 8080` en `src/backend` (con `requirements-agente.txt` instalado) y
+   `ollama serve`.
+3. `npm run dev`.
 
 ## 6. Desplegar para el video y el Demo Day
 
@@ -118,11 +151,11 @@ ida y vuelta.
 
 ## 7. Checklist antes de grabar
 
-- [ ] Flujo completo sin errores: Inicio → Hablar con AURA → elegir
-      servicio → elegir horario → confirmación dentro del chat → aparece
-      en "Mis citas".
+- [ ] Flujo completo sin errores: Inicio → Hablar con AURA → contar qué
+      necesitas → tocar una tarjeta → comprobante en el chat → aparece en
+      "Mis citas" → cancelar.
+- [ ] Cambiar de estudiante con el selector: cada uno ve su chat y sus citas.
 - [ ] Comparaste lado a lado con el Figma — si algo no calza (tipografía,
       algún espaciado), es ajustable en minutos, avísame.
-- [ ] `lib/api.ts` ya apunta al backend real (o, si todavía no está listo,
-      el mock se deja tal cual — igual demuestra el flujo completo).
+- [ ] Backend y Ollama encendidos (`GET /api/chat/estado` dice «Listo»).
 - [ ] Mencionas en el video qué datasets alimentan lo que ves en pantalla.

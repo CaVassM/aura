@@ -6,8 +6,10 @@ import { ReactNode } from "react";
 import { CalendarRange, Info, Share2 } from "lucide-react";
 import { EstadoCarga, EstadoError } from "@/components/ui/Estados";
 import { rangoCorto } from "@/lib/format";
+import { RUTA_EN_VIVO, useActividad } from "./ActividadProvider";
 import { useDemo } from "./DemoProvider";
 import { coordinacionNav } from "./nav";
+import AvisosActividad from "./en-vivo/AvisosActividad";
 import ReiniciarDemo from "./ReiniciarDemo";
 
 /**
@@ -18,9 +20,11 @@ import ReiniciarDemo from "./ReiniciarDemo";
 export default function CoordinacionShell({ children }: { children: ReactNode }) {
   const ruta = usePathname();
   const { estado, error, cargando, reintentar } = useDemo();
+  const { sinVer, conectado, loteAbierto } = useActividad();
 
   return (
     <div className="flex min-h-screen bg-co-bg text-co-navy">
+      <AvisosActividad />
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col overflow-y-auto bg-co-teal-deep px-4 py-6 text-co-bg lg:flex">
         <div className="flex items-center gap-3 px-2">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-co-bg text-co-teal-deep">
@@ -51,6 +55,27 @@ export default function CoordinacionShell({ children }: { children: ReactNode })
                 )}
                 <span className="shrink-0 [&>svg]:h-[18px] [&>svg]:w-[18px]">{item.icon}</span>
                 {item.label}
+                {item.href === "/coordinacion/lotes" && loteAbierto && (
+                  <span
+                    className="ml-auto h-2 w-2 animate-breathe rounded-full bg-co-amber"
+                    title="Hay un lote abierto"
+                    aria-label="Hay un lote abierto"
+                  />
+                )}
+                {item.href === RUTA_EN_VIVO && (
+                  <span className="ml-auto flex items-center gap-1.5">
+                    {sinVer > 0 && (
+                      <span className="tabular rounded-full bg-co-coral px-1.5 py-0.5 text-[11px] font-extrabold leading-none text-white animate-pop-in">
+                        {sinVer}
+                      </span>
+                    )}
+                    <span
+                      className={`h-2 w-2 rounded-full ${conectado ? "bg-co-sage animate-breathe" : "bg-co-amber"}`}
+                      title={conectado ? "Conectado en tiempo real" : "Reconectando…"}
+                      aria-hidden="true"
+                    />
+                  </span>
+                )}
               </Link>
             );
           })}

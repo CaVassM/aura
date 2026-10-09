@@ -71,10 +71,11 @@ etiquetas:
     low: baja
     medium: media
     high: alta
+    evaluation_week: una semana de evaluaciones
   senales:
     S1:
-      nombre: Alerta de abandono
-      descripcion: "La alerta de abandono es {umbral}."
+      nombre: Temporada de evaluación
+      descripcion: "Hoy cae en {umbral} del calendario académico (D7)."
     S2:
       nombre: Caída de asistencia
       descripcion: "La tasa de asistencia bajó al menos {umbral} frente al período anterior."
