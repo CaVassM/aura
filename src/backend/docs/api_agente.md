@@ -132,6 +132,8 @@ Si el backend arranca sin `requirements-agente.txt`, todo funciona excepto `/api
 | `AURA_OLLAMA_TEMPERATURE` | `0.2` | Baja para que use las herramientas de forma estable |
 | `AURA_OLLAMA_NUM_CTX` | `8192` | Contexto en tokens (el de Ollama por defecto es corto para prompt + herramientas) |
 | `AURA_OLLAMA_TIMEOUT` | `120` | Segundos de espera por respuesta del modelo |
+| `AURA_OLLAMA_REASONING` | vacío | `false` apaga el «pensar» del modelo (más rápido); `true` lo enciende; vacío usa el comportamiento del modelo |
+| `AURA_OLLAMA_KEEP_ALIVE` | `30m` | Tiempo que el modelo queda cargado en memoria sin uso |
 | `AURA_AGENTE_MAX_PASOS` | `10` | Llamadas al modelo por mensaje antes de rendirse |
 | `AURA_AGENTE_MAX_TURNOS` | `12` | Mensajes de la persona que recuerda el agente |
 

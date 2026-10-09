@@ -40,6 +40,8 @@ def crear_modelo(config: ConfigAgente):
         base_url=config.url,
         temperature=config.temperatura,
         num_ctx=config.num_ctx,
+        reasoning=config.razonamiento,
+        keep_alive=config.keep_alive,
         client_kwargs={"timeout": config.timeout_s},
     )
 

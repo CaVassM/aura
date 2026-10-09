@@ -78,6 +78,8 @@ def ollama_falso():
 
 def test_chat_de_punta_a_punta_con_chatollama(settings, estado_fresco, ollama_falso, monkeypatch):
     monkeypatch.setenv("AURA_OLLAMA_URL", ollama_falso)
+    monkeypatch.setenv("AURA_OLLAMA_REASONING", "false")
+    monkeypatch.setenv("AURA_OLLAMA_KEEP_ALIVE", "45m")
     config = ConfigAgente.desde_entorno()
     with TestClient(create_app(settings, estado_fresco, agente=AgenteAura(config))) as cliente:
         r = cliente.post("/api/chat", json={"mensaje": "Tengo parciales y estoy agobiada", "estudiante_id": "E1"})
@@ -89,6 +91,7 @@ def test_chat_de_punta_a_punta_con_chatollama(settings, estado_fresco, ollama_fa
 
     primero = PEDIDOS[0]
     assert primero["model"] == "gemma4" and primero["options"]["num_ctx"] == config.num_ctx
+    assert primero["think"] is False and primero["keep_alive"] == "45m"
     assert {t["function"]["name"] for t in primero["tools"]} == {
         "proponer_opciones", "reservar_cita", "cancelar_cita", "listar_mis_citas", "registrar_desencuentro",
     }
