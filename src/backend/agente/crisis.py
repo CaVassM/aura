@@ -22,11 +22,17 @@ _SENALES = [
     r"mejor estar muert",
     r"quiero morir",
     r"quisiera morir",
-    r"hacerme dano",
+    r"hacer(me)? (dano|mal)",
     r"lastimarme",
     r"autolesion",
+    r"terminar con todo",
+    r"no quiero estar viv[oa]",
+    r"(quiero|quisiera|queria|ojala pudiera) desaparecer",
+    r"desaparecer (del mundo|para siempre)",
+    r"sentido a (la vida|nada)",
+    r"sentido (de|para) (seguir|vivir)",
 ]
-_PATRON = re.compile("|".join(_SENALES))
+_PATRON = re.compile(re.sub(r"([a-z])\1+", r"\1", "|".join(_SENALES)))
 
 MENSAJE_CRISIS = (
     "Lamento mucho que estés pasando por esto, y me alegra que me lo cuentes. Tu seguridad es lo más "
@@ -40,7 +46,8 @@ MENSAJE_CRISIS = (
 
 def _sin_tildes(texto: str) -> str:
     base = unicodedata.normalize("NFD", texto.lower())
-    return "".join(c for c in base if unicodedata.category(c) != "Mn")
+    plano = "".join(c for c in base if unicodedata.category(c) != "Mn")
+    return re.sub(r"([a-z])\1+", r"\1", plano)  # tolera letras repetidas por error de tipeo
 
 
 def detectar_crisis(texto: str) -> bool:

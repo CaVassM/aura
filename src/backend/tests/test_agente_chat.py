@@ -304,3 +304,34 @@ def test_el_modelo_no_ve_identificadores_internos(montar):
     assert vistos and "|" not in vistos[0] and '"C0' not in vistos[0] and "SRV_" not in vistos[0]
     opcion = json.loads(vistos[0])["opciones"][0]
     assert opcion["numero"] == 1 and "miércoles" in opcion["texto"] and "noviembre" in opcion["texto"]
+
+
+def test_no_cancela_si_la_persona_solo_comenta_o_duda(montar, estado_fresco):
+    """«ya lo agendaste» no es un pedido de cancelar; un «sí» solo vale si el agente preguntó por cancelar."""
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        humanos = [m.content for m in mensajes if m.type == "human"]
+        if r is not None:
+            if "error" in r:
+                return AIMessage("¿Quieres que la cancele?")
+            return AIMessage("ok")
+        if len(humanos) == 1:
+            return llamada("proponer_opciones", **PARAMS_PROPONER)
+        if len(humanos) == 2:
+            return llamada("reservar_cita", numero=1)
+        previo = [m for m in mensajes if isinstance(m, ToolMessage) and '"cita_id"' in m.content][-1]
+        return llamada("cancelar_cita", cita_id=json.loads(previo.content)["cita"]["cita_id"])
+
+    cliente, _ = montar(guion)
+    sid = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E1"}).json()["session_id"]
+
+    def decir(texto):
+        return cliente.post("/api/chat", json={"mensaje": texto, "estudiante_id": "E1", "session_id": sid}).json()
+
+    assert decir("la primera")["cita"]
+    comenta = decir("O sea igual ya lo agendaste")
+    assert comenta["cita_cancelada"] is None and comenta["respuesta"] == "¿Quieres que la cancele?"
+    assert len(citas_de(estado_fresco, "E1")) == 1
+    confirma = decir("sí")
+    assert confirma["cita_cancelada"]["estado"] == "cancelada"
+    assert citas_de(estado_fresco, "E1") == []

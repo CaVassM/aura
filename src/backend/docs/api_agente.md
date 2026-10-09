@@ -100,7 +100,7 @@ El modelo las llama solo; no son endpoints. Están en `agente/herramientas.py` y
 | `listar_mis_citas` | — | Lista las citas de la persona |
 | `registrar_desencuentro` | — | Avisa que no hubo opción: guarda la última búsqueda (solo después de `proponer_opciones`) |
 
-`proponer_opciones` se **niega a buscar** (`faltan_datos`) si en la conversación la persona no ha mencionado días ni canal (`agente/entrada.py`; basta una mención, incluso «cualquier día» o «da igual»). Es una red de seguridad contra modelos pequeños que inventan esos datos; el agente debe preguntárselos. Cada opción llega al modelo con un `texto` ya redactado (servicio, día, fecha, hora y canal) para que lo copie.
+`proponer_opciones` se **niega a buscar** (`faltan_datos`) si en la conversación la persona no ha mencionado días ni canal (`agente/entrada.py`; basta una mención, incluso «cualquier día» o «da igual»). Es una red de seguridad contra modelos pequeños que inventan esos datos; el agente debe preguntárselos (tolera letras repetidas por error de tipeo). Del mismo modo, `cancelar_cita` se niega (`falta_confirmacion`) si el mensaje no pide cancelar ni responde «sí» a una pregunta de cancelar. Cada opción llega al modelo con un `texto` ya redactado (servicio, día, fecha, hora y canal) para que lo copie.
 
 \* Opcionales si ya se enviaron en `POST /chat`. Si no hay distrito, el agente lo pregunta.
 

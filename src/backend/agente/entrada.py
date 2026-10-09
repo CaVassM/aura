@@ -8,25 +8,38 @@ la búsqueda cuando no hay ninguna pista, y el error le dice al modelo qué preg
 import re
 import unicodedata
 
-_DIAS = re.compile(
+
+def _colapsar(texto: str) -> str:
+    """«iguual» → «igual», «llamada» → «lamada»: tolera letras repetidas por error. Se aplica al texto y a los patrones."""
+    return re.sub(r"([a-z])\1+", r"\1", texto)
+
+
+_DIAS = re.compile(_colapsar(
     r"\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo|hoy|pasado manana|"
     r"cualquier dia|todos los dias|cada dia|toda la semana|entre semana|fin(es)? de semana|"
     r"(esta|la proxima|la otra|proxima) semana|dias? de semana|dia(s)? que (sea|haya|quieras)|"
     r"(da|me da) igual (el|los) dias?|no importa (el|los) dias?|sin preferencia)\b"
     r"|(?<!la )(?<!las )(?<!de la )\bmanana\b"
-)
-_CANALES = re.compile(
+))
+_CANALES = re.compile(_colapsar(
     r"\b(videollamada|video|virtual|online|en linea|zoom|meet|teams|digital|remot[oa]|"
     r"telefono|telefonic[oa]|llamada|celular|whatsapp|"
     r"presencial|presenciales|en persona|cara a cara|campus|"
     r"cualquier canal|cualquiera|cualquier modalidad|da igual|me da igual|me da lo mismo|"
     r"no importa|indistinto|lo que (haya|sea)|todo digital)\b"
-)
+))
+_CANCELAR = re.compile(_colapsar(
+    r"\b(cancel\w*|anul\w*|elimin\w*|borr\w*|dar de baja|deshaz\w*|deshac\w*|"
+    r"ya no (la |lo )?(quiero|necesito)|no (la |lo )?quiero (mas|ya)|no voy a (ir|asistir|poder))"
+))
+_AFIRMA = re.compile(_colapsar(
+    r"^\W*(si|claro|ok|okay|dale|vale|de acuerdo|confirmo|por favor|afirmativo|correcto|exacto|hazlo|adelante|sip)\b"
+))
 
 
 def _plano(texto: str) -> str:
     base = unicodedata.normalize("NFD", texto.lower())
-    return "".join(c for c in base if unicodedata.category(c) != "Mn")
+    return _colapsar("".join(c for c in base if unicodedata.category(c) != "Mn"))
 
 
 def dijo_dias(textos: list[str]) -> bool:
@@ -45,3 +58,14 @@ def faltantes(textos: list[str]) -> list[str]:
     if not dijo_canal(textos):
         falta.append("el canal (videollamada, teléfono o presencial)")
     return falta
+
+
+def confirma_cancelacion(mensaje: str, ultima_respuesta: str) -> bool:
+    """¿La persona pidió cancelar en este mensaje, o respondió que sí a una pregunta de cancelar?
+
+    Evita que el modelo cancele porque la persona solo comentó o dudó («ya lo agendaste», «sabes mejor no»).
+    """
+    plano = _plano(mensaje)
+    if _CANCELAR.search(plano):
+        return True
+    return "cancel" in _plano(ultima_respuesta) and bool(_AFIRMA.search(plano))

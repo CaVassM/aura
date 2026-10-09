@@ -4,7 +4,8 @@ Diferencias deliberadas con las herramientas del motor (`aura.herramientas`):
 - El modelo NO elige el `estudiante_id`: sale de la sesión, así nadie reserva ni cancela a nombre de otra persona.
 - `reservar_cita` recibe el NÚMERO de la opción elegida (1, 2, 3…) de la última lista; el modelo nunca ve ni copia
   identificadores internos, así que no puede inventarlos ni mostrárselos a la persona.
-- `proponer_opciones` se niega a buscar si la persona no ha dicho días ni canal (ver `entrada.py`).
+- `proponer_opciones` se niega a buscar si la persona no ha dicho días ni canal, y `cancelar_cita` se niega si la
+  persona no pidió cancelar ni confirmó una pregunta de cancelar (ver `entrada.py`).
 - `registrar_desencuentro` no recibe argumentos: usa la última solicitud buscada.
 - Las respuestas son JSON compacto y en español, listo para que el modelo lo redacte.
 """
@@ -191,6 +192,19 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
         return _json({"ok": True, "cita": _cita_para_modelo(resultado["cita"])})
 
     def cancelar_cita(cita_id: str) -> str:
+        ultima = next(
+            (m.content for m in reversed(sesion.mensajes)
+             if m.type == "ai" and isinstance(m.content, str) and m.content and not getattr(m, "tool_calls", None)),
+            "",
+        )
+        if not entrada.confirma_cancelacion(ctx.mensaje, ultima):
+            resultado = {
+                "ok": False,
+                "error": "falta_confirmacion",
+                "detalle": "La persona no pidió cancelar la cita. Pregúntale si quiere que la cancelen y espera su respuesta.",
+            }
+            registrar("cancelar_cita", False, resultado)
+            return _json(resultado)
         resultado = puerto.cancelar(cita_id.strip(), sesion.estudiante_id)
         registrar("cancelar_cita", bool(resultado.get("ok")), resultado)
         if not resultado.get("ok"):
