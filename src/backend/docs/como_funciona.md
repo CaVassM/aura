@@ -29,7 +29,7 @@ Una **señal** es una condición que resume una parte de la trayectoria académi
 
 **Ejemplo real de D3.** Para `STU_AE_000008`, entre `PER_2026_1` y `PER_2026_2`, la alerta pasa a `medium`; la asistencia baja de **0,884** a **0,732**; `grade_change` es **0,14**, así que S3 no se cumple; y la carga de **27** créditos alcanza el corte del percentil **27,0**. Puntaje: S1 + S2 + S4 = **3**, por lo que es elegible durante la evaluación de `PER_2026_2`. Los valores académicos salen de `D3_academic_trajectory.csv`; los cortes de [parametros.yaml](../config/parametros.yaml).
 
-La comparación agregada con D1 sirve para validar grupos después de calcular el aviso. D1 no entra en las reglas, no cambia el puntaje y no se entrega al agente: así evitamos usar una encuesta de bienestar personal para decidir a quién contactar. Con puntaje mínimo **3**, los resultados son:
+La comparación agregada con D1 sirve para validar grupos después de calcular el aviso. D1 no entra en las reglas, no cambia el puntaje y no se entrega al agente: así evitamos usar una encuesta de bienestar personal para decidir a quién contactar. De lo académico, el agente solo puede consultar la **asistencia** de la persona (la señal S2), únicamente cuando ella habla de sus faltas; no ve notas, créditos ni alertas (herramienta `consultar_asistencia`, ver [api_agente.md](api_agente.md)). Con puntaje mínimo **3**, los resultados son:
 
 | Período | Elegibles entre estudiantes D3 | Ansiedad media D1: elegibles | Ansiedad media D1: no elegibles | Fuente |
 |---|---:|---:|---:|---|

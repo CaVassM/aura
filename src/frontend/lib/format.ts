@@ -123,3 +123,16 @@ export function rangoHoras(desde: string, hasta: string): string {
 export function primeraMayuscula(texto: string): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
+
+/** 0 → "hoy", 1 → "mañana", 5 → "en 5 días", -2 → "hace 2 días". */
+export function enDias(dias: number): string {
+  if (dias === 0) return "hoy";
+  if (dias === 1) return "mañana";
+  if (dias === -1) return "ayer";
+  return dias > 0 ? `en ${dias} días` : `hace ${-dias} días`;
+}
+
+/** 0,8 → "80 %" (porcentaje entero, como se muestra la asistencia). */
+export function porcentaje(tasa: number): string {
+  return `${Math.round(tasa * 100)} %`;
+}

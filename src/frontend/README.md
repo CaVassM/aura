@@ -4,7 +4,7 @@ Landing → campus virtual del estudiante → chat con AURA → panel de coordin
 usa el backend real** (`src/backend`, FastAPI) a través de `lib/api.ts`:
 
 - **Coordinación** (`/coordinacion`): contrato en `src/backend/docs/api_coordinacion.md`.
-- **Estudiante** (`/campus/chat`, `/campus/citas`): el chat habla con el agente conversacional
+- **Estudiante** (`/campus/chat`, `/campus/citas`, y `/campus/cursos|calificaciones|calendario` con datos académicos simulados + calendario D7): el chat habla con el agente conversacional
   (LangChain + Ollama) y las citas son las del backend. Contrato en `src/backend/docs/api_agente.md`.
   Hace falta el backend corriendo y `ollama serve` con el modelo descargado; si el backend no responde,
   las pantallas muestran un mensaje claro y la conversación explica qué falta.
@@ -37,8 +37,7 @@ exacto. Dos cosas que no puedo garantizar sin el archivo real de Figma:
 - **La tipografía.** Usé "Plus Jakarta Sans" (Google Fonts, gratis) porque
   se parece mucho a la de tus capturas, pero si tu equipo ya eligió otra
   fuente puntual, solo se cambia en `app/layout.tsx` (una línea).
-- **Las pantallas que no mandaste capturas.** "Mis cursos",
-  "Calificaciones", "Calendario", "Mapa de servicios", "Desencuentros" y
+- **Las pantallas que no mandaste capturas.** "Mapa de servicios", "Desencuentros" y
   "Reglas" existen como placeholders (dicen honestamente "fuera del
   alcance de este entregable") para que ningún link del sidebar se sienta
   roto si lo clickeas en el video — pero no inventé un diseño para ellas
@@ -54,12 +53,15 @@ app/
 │   ├── page.tsx                   Inicio
 │   ├── chat/page.tsx              Conversar con AURA (agente real)
 │   ├── citas/page.tsx             Mis citas (del backend; se pueden cancelar)
-│   └── cursos|calificaciones|calendario/   placeholders
+│   ├── cursos/page.tsx            Mis cursos (período D7, asistencia, horario semanal; datos simulados)
+│   ├── calificaciones/page.tsx    Notas por curso, promedio y nota necesaria para aprobar
+│   └── calendario/page.tsx        Calendario D7 + clases, evaluaciones y mis citas
 └── coordinacion/                 panel de la red (usa el backend); en-vivo/ = citas nuevas en tiempo real (SSE)
 
 components/
 ├── PortalShell.tsx        marco del campus (barra teal, mismo estilo que Coordinación)
 ├── campus/                nav, PerfilProvider y selector de estudiante (TopbarControls)
+│   └── academico/         anillo, cuenta animada y colores por curso de Mis cursos, Calificaciones y Calendario
 ├── coordinacion/          todo el panel de Coordinación
 ├── chat/                  burbujas, tarjetas de opciones, comprobante de cita, «escribiendo…»
 └── ui/                    Tag, StatCard, Placeholder, Estados

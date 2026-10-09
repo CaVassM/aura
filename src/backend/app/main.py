@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api import actividad, avisos, catalogo, chat, citas, coordinacion, lotes, demo, desencuentros, reglas, salud
+from .api import academico, actividad, avisos, catalogo, chat, citas, coordinacion, lotes, demo, desencuentros, reglas, salud
 from .repositories.app_state import AppState
 from .services.errors import PlatformError
 from .services.siembra_service import crear_estado_sembrado
@@ -42,7 +42,7 @@ def create_app(
             content={"error": error.code, "detalle": error.detalle},
         )
 
-    for router in (salud, demo, coordinacion, actividad, lotes, avisos, desencuentros, reglas, catalogo, citas, chat):
+    for router in (salud, demo, coordinacion, actividad, academico, lotes, avisos, desencuentros, reglas, catalogo, citas, chat):
         app.include_router(router.router)
     return app
 

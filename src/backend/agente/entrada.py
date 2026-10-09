@@ -86,3 +86,15 @@ def confirma_cancelacion(mensaje: str, ultima_respuesta: str) -> bool:
     if _CANCELAR.search(plano):
         return True
     return "cancel" in _plano(ultima_respuesta) and bool(_AFIRMA.search(plano))
+
+
+_ASISTENCIA = re.compile(_colapsar(
+    r"\b(asistencia|inasistencia\w*|ausencia\w*|faltas|faltado|faltando|faltar a|faltare a|falte a|"
+    r"no (he )?(ido|asistido|voy|fui) a (las )?(clase|clases|mis clases|la universidad)|"
+    r"perdido (muchas |varias |bastantes )?clases|dejado de ir a)"
+))
+
+
+def menciona_asistencia(mensaje: str) -> bool:
+    """¿La persona habló de su asistencia a clases en este mensaje? Frena que el modelo consulte ese dato por su cuenta."""
+    return bool(_ASISTENCIA.search(_plano(mensaje)))

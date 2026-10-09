@@ -2,6 +2,7 @@
 
 import pytest
 
+from agente import entrada
 from agente.entrada import dijo_canal, dijo_dias, faltantes
 
 
@@ -84,3 +85,18 @@ def test_entrar_al_lote_exige_aceptacion_clara(mensaje, ultima, esperado):
     from agente.entrada import acepta_lote
 
     assert acepta_lote(mensaje, ultima) is esperado
+
+
+@pytest.mark.parametrize("texto", [
+    "¿Cómo va mi asistencia?", "He faltado mucho", "tengo muchas inasistencias", "no he ido a clases",
+    "llevo muchas faltas en cálculo", "perdido varias clases",
+])
+def test_menciona_asistencia(texto):
+    assert entrada.menciona_asistencia(texto)
+
+
+@pytest.mark.parametrize("texto", [
+    "Tengo parciales", "me falta tiempo", "puedo asistir el miércoles", "por videollamada", "quiero agendar una cita",
+])
+def test_no_menciona_asistencia(texto):
+    assert not entrada.menciona_asistencia(texto)

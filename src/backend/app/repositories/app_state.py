@@ -12,6 +12,7 @@ from aura.herramientas.configuracion import cargar_yaml
 from aura.servicio import ServicioAsignacion
 
 from ..settings import Settings
+from .academico_repository import AcademicoRepository
 from .actividad_repository import ActividadRepository
 from .avisos_repository import AvisosRepository
 from .chat_repository import ChatRepository
@@ -34,6 +35,7 @@ class AppState:
     actividad: ActividadRepository = field(default_factory=ActividadRepository)
     avisos: AvisosRepository = field(default_factory=AvisosRepository)
     lotes: LoteRepository = field(default_factory=LoteRepository)
+    academico: AcademicoRepository = field(default_factory=AcademicoRepository)
     siembra: dict = field(default_factory=dict)
     lock: RLock = field(default_factory=RLock)
 
@@ -106,6 +108,7 @@ def construir_estado(
         },
         motor=motor,
         geo=cargar_geo_d6(settings.data_dir / "D6_services_map.geojson"),
+        academico=AcademicoRepository.desde_data_pack(settings.data_dir),
         espera_linea_base_dias=(
             historica if historica is not None else float(demo["espera_linea_base_dias"])
         ),

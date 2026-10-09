@@ -113,6 +113,10 @@ def _json(datos) -> str:
     return json.dumps(datos, ensure_ascii=False)
 
 
+def _pct(tasa: float) -> str:
+    return f"{round(100 * tasa)} %"
+
+
 def _dia_es(fecha_iso: str) -> str:
     return DIAS_ES[date.fromisoformat(fecha_iso).weekday()]
 
@@ -325,6 +329,45 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             }
         )
 
+    def consultar_asistencia() -> str:
+        textos = [m.content for m in sesion.mensajes if m.type == "human" and isinstance(m.content, str)]
+        if not any(entrada.menciona_asistencia(t) for t in textos + [ctx.mensaje]):
+            resultado = {
+                "ok": False,
+                "error": "no_pidio_asistencia",
+                "detalle": "La persona no habló de su asistencia a clases. No consultes ese dato por tu cuenta.",
+            }
+            registrar("consultar_asistencia", False, resultado)
+            return _json(resultado)
+        resultado = puerto.asistencia(sesion.estudiante_id)
+        registrar("consultar_asistencia", bool(resultado.get("ok")), resultado)
+        if not resultado.get("ok"):
+            return _json({"ok": False, "error": resultado.get("error", "error"), "detalle": resultado.get("detalle", "")})
+        return _json(
+            {
+                "periodo": resultado["periodo"],
+                "asistencia_actual": _pct(resultado["asistencia_actual"]),
+                "asistencia_periodo_anterior": _pct(resultado["asistencia_periodo_anterior"]),
+                "cambio_puntos": round(100 * resultado["variacion"]),
+                "minimo_requerido": _pct(resultado["minimo_requerido"]),
+                "cursos": [
+                    {
+                        "curso": c["curso"],
+                        "asistencia": _pct(c["tasa"]),
+                        "faltas": c["faltas"],
+                        "de_sesiones": c["sesiones"],
+                        "bajo_el_minimo": c["bajo_minimo"],
+                    }
+                    for c in resultado["cursos"]
+                ],
+                "indicacion": (
+                    "Cuéntale sus cifras en simple (las de este período, cómo van frente al período anterior y qué "
+                    "cursos están bajo el mínimo). No interpretes ni diagnostiques, no hables de riesgo ni de avisos, y "
+                    "no tienes acceso a sus notas. Si le preocupa o le pesa, ofrécele buscarle una cita de bienestar."
+                ),
+            }
+        )
+
     def registrar_desencuentro() -> str:
         if sesion.ultima_solicitud is None:
             return _json(
@@ -375,6 +418,15 @@ def construir_herramientas(ctx: ContextoTurno) -> list[StructuredTool]:
             description=(
                 "Pone a la persona en el lote de asignación conjunta. Úsala SOLO después de que proponer_opciones "
                 "devolvió servicios_en_lote y la persona aceptó entrar."
+            ),
+            args_schema=SinArgs,
+        ),
+        StructuredTool.from_function(
+            func=consultar_asistencia,
+            name="consultar_asistencia",
+            description=(
+                "Consulta la asistencia a clases de la persona (este período, el anterior y por curso). Solo lectura y "
+                "solo asistencia: no hay notas. Úsala únicamente si la persona habló de su asistencia o de sus faltas."
             ),
             args_schema=SinArgs,
         ),

@@ -487,3 +487,35 @@ def test_lote_al_resolverse_la_conversacion_recibe_el_aviso(montar, estado_fresc
     historial = cliente.get(f"/api/chat/{sid}", params={"estudiante_id": "E_AVISO"}).json()["mensajes"]
     assert historial[-1]["rol"] == "agent" and "Tu lote se resolvió" in historial[-1]["texto"] and "CITA-" in historial[-1]["texto"]
     assert estado_fresco.chats.obtener(sid).lote_id is None
+
+
+def test_consultar_asistencia_solo_si_la_persona_habla_de_asistencia(montar, estado_fresco):
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        if r is None:
+            return llamada("consultar_asistencia")
+        if r.get("ok") is False:
+            return AIMessage(r["error"])
+        return AIMessage(f"Vas en {r['asistencia_actual']}.")
+
+    cliente, _ = montar(guion)
+    # Sin hablar de asistencia el modelo no puede consultarla por su cuenta
+    nada = cliente.post("/api/chat", json={"mensaje": "Tengo parciales", "estudiante_id": "STU_DEMO_001"}).json()
+    assert nada["respuesta"] == "no_pidio_asistencia"
+    # Hablando de ella, recibe solo la asistencia
+    r = cliente.post("/api/chat", json={"mensaje": "He faltado mucho a clases, ¿cómo voy de asistencia?", "estudiante_id": "STU_DEMO_001"}).json()
+    assert r["respuesta"] == "Vas en 80 %."
+    [uso] = r["herramientas_usadas"]
+    assert uso["nombre"] == "consultar_asistencia"
+    resultado = json.dumps(uso, ensure_ascii=False).lower()
+    assert "promedio" not in resultado and "credito" not in resultado
+
+
+def test_consultar_asistencia_sin_datos_simulados_responde_error(montar):
+    def guion(mensajes):
+        r = ultimo_resultado(mensajes)
+        return llamada("consultar_asistencia") if r is None else AIMessage(r["error"])
+
+    cliente, _ = montar(guion)
+    r = cliente.post("/api/chat", json={"mensaje": "¿Cómo va mi asistencia?", "estudiante_id": "STU_AE_000001"}).json()
+    assert r["respuesta"] == "sin_datos_academicos"

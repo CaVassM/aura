@@ -9,6 +9,7 @@
  */
 
 import { AvisoEstudiante, ChatRespuesta, Cita, HistorialChat } from "./types";
+import { RespuestaCalendario, RespuestaCalificaciones, RespuestaCursos } from "./types-academico";
 import {
   ActividadRespuesta,
   DesencuentrosRespuesta,
@@ -193,3 +194,17 @@ export const getAvisos = (estudianteId: string, desde = 0) =>
 /** URL del flujo en tiempo real (SSE) de los avisos de la persona. */
 export const urlAvisosStream = (estudianteId: string, desde = 0) =>
   `${API_BASE_URL}/api/estudiantes/${encodeURIComponent(estudianteId)}/avisos/stream?desde=${desde}`;
+
+// --- Vida académica simulada (cursos, calificaciones, calendario D7) ---
+
+const academico = (estudianteId: string, seccion: string) =>
+  `/api/estudiantes/${encodeURIComponent(estudianteId)}/academico/${seccion}`;
+
+export const getCursos = (estudianteId: string) =>
+  request<RespuestaCursos>(academico(estudianteId, "cursos"));
+
+export const getCalificaciones = (estudianteId: string) =>
+  request<RespuestaCalificaciones>(academico(estudianteId, "calificaciones"));
+
+export const getCalendario = (estudianteId: string) =>
+  request<RespuestaCalendario>(academico(estudianteId, "calendario"));

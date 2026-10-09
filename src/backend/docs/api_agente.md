@@ -101,6 +101,7 @@ El modelo las llama solo; no son endpoints. Están en `agente/herramientas.py` y
 | `cancelar_cita` | `cita_id` | Cancela una cita **de esa persona** |
 | `listar_mis_citas` | — | Lista las citas de la persona |
 | `entrar_a_lote` | — | Pone a la persona en el lote abierto (lo abre si no hay). Solo después de `proponer_opciones` → `servicios_en_lote` **y** si la persona aceptó (mismo tipo de bloqueo que cancelar) |
+| `consultar_asistencia` | — | Lee la **asistencia a clases** de la persona (período actual, anterior y por curso). Es el **único** dato académico que ve el agente; se niega (`no_pidio_asistencia`) si la persona no habló de su asistencia o sus faltas |
 | `registrar_desencuentro` | — | Avisa que no hubo opción: guarda la última búsqueda (solo después de `proponer_opciones`) |
 
 `proponer_opciones` se **niega a buscar** (`faltan_datos`) si en la conversación la persona no ha mencionado días ni canal (`agente/entrada.py`; basta una mención, incluso «cualquier día» o «da igual»). Es una red de seguridad contra modelos pequeños que inventan esos datos; el agente debe preguntárselos (tolera letras repetidas por error de tipeo). Del mismo modo, `cancelar_cita` se niega (`falta_confirmacion`) si el mensaje no pide cancelar ni responde «sí» a una pregunta de cancelar. Cada opción llega al modelo con un `texto` ya redactado (servicio, día, fecha, hora y canal) para que lo copie.
@@ -108,6 +109,24 @@ El modelo las llama solo; no son endpoints. Están en `agente/herramientas.py` y
 \* Opcionales si ya se enviaron en `POST /chat`. Si no hay distrito, el agente lo pregunta.
 
 `estudiante_id` **no** es parámetro de ninguna herramienta: sale de la sesión. Motivos válidos: `academic_pressure`, `sleep_and_routine`, `social_support`, `career_concern`, `preventive_guidance`, `service_navigation` (su servicio ideal está en `config/tablas.yaml`).
+
+### Asistencia: lo único académico que ve el agente
+
+`consultar_asistencia` devuelve solo `periodo`, `asistencia_actual`, `asistencia_periodo_anterior`, `variacion`, `minimo_requerido` y, por curso, `curso`, `asistencia`, `faltas`, `de_sesiones` y `bajo_el_minimo`. **No** hay notas, créditos, docentes, alertas ni encuesta D1 (la regla ya documentada en [como_funciona.md §2](como_funciona.md): D1 no se entrega al agente; de lo académico, solo la asistencia, que es la señal S2 del aviso). Para el agente no es un diagnóstico: el prompt le pide contar las cifras en simple, no hablar de riesgo ni de avisos, y ofrecer una cita de bienestar si le preocupa. Está implementado en `AcademicoService.asistencia_para_agente` y `PuertoPlataforma.asistencia`; los datos son simulados (ver abajo) y solo existen para los perfiles de la demo (`STU_DEMO_001…004`): para otra persona devuelve `sin_datos_academicos`.
+
+## Vida académica del campus (cursos, calificaciones, calendario)
+
+Alimentan las páginas `Mis cursos`, `Calificaciones` y `Calendario` del campus. **Simulado** (ni D1 ni D7 traen cursos, horarios ni notas): se inventa para los cuatro perfiles de la demo en `app/repositories/academico_repository.py`. Lo único real es el **calendario D7**: período `PER_2026_4` (5 oct – 23 dic), semanas de evaluación y actividades, filtrados por la institución y el distrito de la persona (`ALL` o el suyo: la pausa de bienestar es solo de Gaia; el encuentro estudiantil, solo de su institución y distrito). Estos endpoints son de lectura y los usa el frontend, no el agente.
+
+| Método | Ruta | Devuelve |
+|---|---|---|
+| GET | `/api/estudiantes/{id}/academico/cursos` | `periodo` (semana, avance, evaluación en curso/próxima), `asistencia` (tasa, anterior, variación), `cursos[]` (horario, docente, aula, asistencia, promedio parcial, próxima evaluación) |
+| GET | `/api/estudiantes/{id}/academico/calificaciones` | `escala` (1,0–7,0; aprueba 4,0), `promedio_general` y `variacion` (vs. período anterior), `cursos[]` con `evaluaciones[]` (nota, peso, estado `calificada`/`sin_publicar`/`programada`), `nota_necesaria` y `situacion` |
+| GET | `/api/estudiantes/{id}/academico/calendario` | `eventos[]`: eventos D7 (`periodo_inicio`, `periodo_fin`, `semana_evaluacion`, `bienestar`, `actividad_universitaria`), `clase` (con `estado` `asistio`/`falto`/`programada`) y `evaluacion` |
+
+`404 no_encontrado` si la persona no es un perfil de la demo. «Hoy» es el de la demo (`GET /api/demo/estado`, 15 nov 2026, último día de las evaluaciones intermedias).
+
+Supuestos de la simulación (no salen de los datos): sin clases en las semanas de evaluación de D7; los exámenes parciales y finales caen dentro de esas semanas; asistencia mínima de **70 %**; escala 1,0–7,0 como `average_grade` de D3 y aprobación en 4,0; las inasistencias y notas son inventadas (Lucía y Diego tienen caída de asistencia frente al período anterior, para ilustrar la señal S2; Mateo y Valentina no).
 
 ## Instalar y probar en tu PC
 

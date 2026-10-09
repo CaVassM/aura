@@ -7,6 +7,7 @@ from agente.config import ConfigAgente
 from fastapi import Depends, Request
 
 from .repositories.app_state import AppState
+from .services.academico_service import AcademicoService
 from .services.actividad_service import ActividadService
 from .services.catalogo_service import CatalogoService
 from .services.chat_service import ChatService
@@ -22,6 +23,10 @@ from .services.servicios_service import ServiciosService
 
 def get_estado(request: Request) -> AppState:
     return request.app.state.estado
+
+
+def get_academico(estado: AppState = Depends(get_estado)) -> AcademicoService:
+    return AcademicoService(estado)
 
 
 def get_demo(estado: AppState = Depends(get_estado)) -> DemoService:

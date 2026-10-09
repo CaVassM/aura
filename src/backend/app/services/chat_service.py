@@ -17,6 +17,7 @@ from agente.sesion import ContextoEstudiante, SesionChat
 from ..models import Cita
 from ..repositories.app_state import AppState
 from ..schemas.citas import cita_out
+from .academico_service import AcademicoService
 from .citas_service import CitasService
 from .errors import (
     AgenteNoDisponibleError,
@@ -78,6 +79,9 @@ class PuertoPlataforma:
             return LoteService(self._estado).entrar(estudiante_id, solicitud, sesion_id, origen="chat")
         except PlatformError as error:
             return self._error(error)
+
+    def asistencia(self, estudiante_id: str) -> dict:
+        return AcademicoService(self._estado).asistencia_para_agente(estudiante_id)
 
     def registrar_desencuentro(self, solicitud: dict) -> dict:
         return self._citas.registrar_desencuentro(solicitud, origen="chat")
