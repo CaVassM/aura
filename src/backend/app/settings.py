@@ -12,10 +12,13 @@ ORIGENES_BASE = ("http://localhost:3000", "http://localhost:5173")
 @dataclass(frozen=True)
 class Settings:
     """AURA_DATA_DIR: Data Pack (si falta, `data_pack_path` de parametros.yaml).
-    AURA_CORS_ORIGINS: orígenes extra separados por coma."""
+    AURA_CORS_ORIGINS: orígenes extra separados por coma.
+    AURA_CORS_ORIGIN_REGEX: expresión regular de orígenes permitidos (p. ej. `https://.*\\.vercel\\.app` para las
+    previsualizaciones de Vercel)."""
 
     data_dir: Path
     cors_origins: tuple[str, ...] = field(default=ORIGENES_BASE)
+    cors_origin_regex: str | None = None
 
     @classmethod
     def desde_entorno(cls) -> "Settings":
@@ -24,4 +27,8 @@ class Settings:
             for o in os.environ.get("AURA_CORS_ORIGINS", "").split(",")
             if o.strip()
         ]
-        return cls(data_dir=ruta_data_pack(), cors_origins=ORIGENES_BASE + tuple(extra))
+        return cls(
+            data_dir=ruta_data_pack(),
+            cors_origins=ORIGENES_BASE + tuple(extra),
+            cors_origin_regex=os.environ.get("AURA_CORS_ORIGIN_REGEX", "").strip() or None,
+        )

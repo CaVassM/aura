@@ -1,0 +1,80 @@
+# Backend de AURA en tu PC + túnel de Cloudflare hacia Internet. El frontend vive en Vercel.
+#
+#   1. cp .env.example .env   y completa TUNNEL_TOKEN (y la URL de Vercel en AURA_CORS_ORIGINS)
+#   2. docker compose --profile tunnel up -d --build
+#   3. En Vercel: NEXT_PUBLIC_API_URL = https://<tu-hostname-del-túnel>
+#
+# Perfiles (se activan con --profile):
+#   tunnel         cloudflared con tu túnel con nombre (token del panel de Cloudflare Zero Trust)
+#   tunnel-rapido  túnel temporal sin cuenta (trycloudflare.com): la URL cambia cada vez
+#   ollama         Ollama dentro de Docker con GPU NVIDIA (por defecto se usa el Ollama de tu PC)
+name: aura
+
+services:
+  backend:
+    build:
+      context: ./src/backend
+    image: aura-backend:local
+    restart: unless-stopped
+    environment:
+      AURA_DATA_DIR: /data
+      # Orígenes que pueden llamar a la API desde el navegador (tu dominio de Vercel, separados por coma)
+      AURA_CORS_ORIGINS: ${AURA_CORS_ORIGINS:-}
+      # Opcional: previsualizaciones de Vercel, p. ej.  https://aura-.*\.vercel\.app
+      AURA_CORS_ORIGIN_REGEX: ${AURA_CORS_ORIGIN_REGEX:-}
+      # Ollama: por defecto el de tu PC (host.docker.internal); con el perfil `ollama`, http://ollama:11434
+      AURA_OLLAMA_URL: ${AURA_OLLAMA_URL:-http://host.docker.internal:11434}
+      AURA_OLLAMA_MODEL: ${AURA_OLLAMA_MODEL:-gemma4}
+      AURA_OLLAMA_TEMPERATURE: ${AURA_OLLAMA_TEMPERATURE:-0.2}
+      AURA_OLLAMA_NUM_CTX: ${AURA_OLLAMA_NUM_CTX:-8192}
+      AURA_OLLAMA_TIMEOUT: ${AURA_OLLAMA_TIMEOUT:-120}
+      AURA_OLLAMA_REASONING: ${AURA_OLLAMA_REASONING:-}
+      AURA_OLLAMA_KEEP_ALIVE: ${AURA_OLLAMA_KEEP_ALIVE:-30m}
+      AURA_LINEA_AYUDA: ${AURA_LINEA_AYUDA:-}
+    volumes:
+      # Data Pack (D1, D2, D6, D7…): solo lectura, no va dentro de la imagen
+      - ${AURA_DATA_HOST_DIR:-./src/backend/data_pack}:/data:ro
+    # Solo escucha en tu PC; a Internet sale únicamente por el túnel
+    ports:
+      - "127.0.0.1:8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # en Docker Desktop ya existe; en Linux hace falta esta línea
+
+  tunnel:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # Túnel con nombre: el hostname público y su destino (http://backend:8080) se configuran en el panel de Cloudflare
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}  # si queda vacío, cloudflared lo avisa al arrancar
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  tunnel-rapido:
+    profiles: ["tunnel-rapido"]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # Túnel temporal: la URL aparece en los logs (docker compose logs tunnel-rapido) y cambia en cada arranque
+    command: tunnel --no-autoupdate --url http://backend:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_modelos:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama_modelos:

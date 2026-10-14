@@ -1,0 +1,103 @@
+# Frontend: verificación en cada cambio y despliegue en Vercel al actualizar `main`.
+#
+# Requisitos únicos (una vez):
+#   1. En Vercel, crea el proyecto con "Root Directory" = src/frontend  y define la variable
+#      NEXT_PUBLIC_API_URL (Production) = URL pública del túnel de Cloudflare.
+#   2. En GitHub → Settings → Secrets and variables → Actions, agrega: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+#      (VERCEL_ORG_ID y VERCEL_PROJECT_ID salen de `.vercel/project.json` tras ejecutar `vercel link`.)
+#   3. Si el proyecto de Vercel ya está conectado al repo por la integración con Git, desactiva ese
+#      despliegue automático o este job: hacer los dos duplicaría los despliegues.
+#
+# Las dependencias se instalan SIEMPRE con `npm ci`: respeta package-lock.json al pie de la letra y falla
+# si el lock no coincide con package.json.
+name: Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/frontend/**"
+      - ".github/workflows/frontend.yaml"
+  pull_request:
+    paths:
+      - "src/frontend/**"
+      - ".github/workflows/frontend.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    name: Tipos y compilación
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Instalar dependencias (respeta package-lock.json)
+        run: npm ci
+
+      - name: Revisar tipos
+        run: npx tsc --noEmit
+
+      - name: Compilar
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  desplegar:
+    name: Desplegar en Vercel
+    needs: verificar
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: ¿Están los secretos de Vercel?
+        id: secretos
+        run: |
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ]; then
+            echo "listos=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Faltan VERCEL_TOKEN, VERCEL_ORG_ID o VERCEL_PROJECT_ID: no se despliega."
+            echo "listos=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secretos.outputs.listos == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.secretos.outputs.listos == 'true'
+        with:
+          node-version: 20
+
+      # Se ejecuta desde la raíz del repo: la carpeta del frontend la define "Root Directory" en el proyecto de Vercel.
+      # `vercel build` usa installCommand = "npm ci" de src/frontend/vercel.json.
+      - name: Traer configuración del proyecto
+        if: steps.secretos.outputs.listos == 'true'
+        run: npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Compilar
+        if: steps.secretos.outputs.listos == 'true'
+        run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+
+      - name: Publicar
+        if: steps.secretos.outputs.listos == 'true'
+        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"

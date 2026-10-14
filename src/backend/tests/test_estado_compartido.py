@@ -124,3 +124,22 @@ def test_reiniciar_restaura_la_demo(client_fresco, estado_fresco):
     respuesta = client_fresco.post("/api/demo/reiniciar")
     assert respuesta.status_code == 200 and respuesta.json()["etiqueta"].startswith("Simulación")
     assert kpis(client_fresco) == sembrado  # mismo objeto de estado, contenido reconstruido
+
+
+def test_cors_acepta_el_origen_del_frontend_desplegado(settings, estado_fresco):
+    """El frontend en Vercel llama al backend por el túnel: su origen debe poder configurarse por entorno."""
+    from dataclasses import replace
+
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    ajustes = replace(settings, cors_origins=settings.cors_origins + ("https://aura.vercel.app",), cors_origin_regex=r"https://aura-.*\.vercel\.app")
+    with TestClient(create_app(ajustes, estado_fresco)) as c:
+        def permitido(origen):
+            r = c.get("/api/salud", headers={"Origin": origen})
+            return r.headers.get("access-control-allow-origin")
+
+        assert permitido("https://aura.vercel.app") == "https://aura.vercel.app"
+        assert permitido("https://aura-git-main-equipo.vercel.app") == "https://aura-git-main-equipo.vercel.app"  # previsualización
+        assert permitido("https://otro-sitio.example") is None

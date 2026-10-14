@@ -1,0 +1,12 @@
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+venv
+.env
+tests
+experimentos
+salidas
+notebooks
+# El Data Pack se monta como volumen
+data_pack
