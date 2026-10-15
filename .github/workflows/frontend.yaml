@@ -88,6 +88,25 @@ jobs:
         with:
           node-version: 20
 
+      # El CLI trata un VERCEL_ORG_ID que no empieza con `team_` como cuenta personal y falla con «Project not found» si no
+      # coincide con el dueño real del proyecto (o si el token es de otro ámbito). Se toma el dueño del propio proyecto.
+      - name: Resolver la cuenta dueña del proyecto
+        if: steps.secretos.outputs.listos == 'true'
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          token, org, prj = os.environ["VERCEL_TOKEN"], os.environ["VERCEL_ORG_ID"], os.environ["VERCEL_PROJECT_ID"]
+          r = urllib.request.Request("https://api.vercel.com/v9/projects/" + prj, headers={"Authorization": "Bearer " + token})
+          with urllib.request.urlopen(r) as x:
+              dueno = json.load(x)["accountId"]
+          print("::add-mask::" + dueno)
+          print("El dueño del proyecto empieza con team_:", dueno.startswith("team_"), "| coincide con VERCEL_ORG_ID:", dueno == org)
+          if dueno != org:
+              print("::warning::VERCEL_ORG_ID no coincide con la cuenta dueña del proyecto: se usa la del proyecto. Corrige el secreto (Vercel -> Settings -> General -> Team ID / .vercel/project.json -> orgId).")
+              with open(os.environ["GITHUB_ENV"], "a") as f:
+                  f.write("VERCEL_ORG_ID=" + dueno + "\n")
+          PY
+
       # Se ejecuta desde la raíz del repo: la carpeta del frontend la define "Root Directory" en el proyecto de Vercel.
       # `vercel build` usa installCommand = "npm ci" de src/frontend/vercel.json.
       - name: Traer configuración del proyecto
@@ -98,32 +117,6 @@ jobs:
         if: steps.secretos.outputs.listos == 'true'
         run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
 
-      - name: Diagnóstico de credenciales (solo muestra sí/no, nunca valores)
-        if: steps.secretos.outputs.listos == 'true'
-        run: |
-          python3 - <<'PY'
-          import json, os, urllib.request, urllib.error
-          token, org, prj = os.environ["VERCEL_TOKEN"], os.environ["VERCEL_ORG_ID"], os.environ["VERCEL_PROJECT_ID"]
-          print("ORG_ID empieza con team_:", org.startswith("team_"), "| PROJECT_ID empieza con prj_:", prj.startswith("prj_"))
-          def llamar(ruta):
-              r = urllib.request.Request("https://api.vercel.com" + ruta, headers={"Authorization": "Bearer " + token})
-              try:
-                  with urllib.request.urlopen(r) as x:
-                      return x.status, json.load(x)
-              except urllib.error.HTTPError as e:
-                  return e.code, None
-          est, user = llamar("/v2/user")
-          print("GET /v2/user ->", est, "| ORG_ID es el id del usuario:", bool(user) and user["user"]["id"] == org)
-          est, eq = llamar("/v2/teams")
-          ids = [t["id"] for t in (eq or {}).get("teams", [])]
-          print("GET /v2/teams ->", est, "| equipos visibles:", len(ids), "| ORG_ID es uno de ellos:", org in ids)
-          est, p = llamar("/v9/projects/" + prj)
-          print("GET /v9/projects/<id> (sin teamId) ->", est)
-          est, p = llamar("/v9/projects/" + prj + "?teamId=" + org)
-          print("GET /v9/projects/<id>?teamId=<ORG_ID> ->", est)
-          PY
-
       - name: Publicar
         if: steps.secretos.outputs.listos == 'true'
-        run: npx --yes vercel@latest deploy --prebuilt --prod --debug --token="$VERCEL_TOKEN" 2>&1 | sed -E 's/(Bearer )[A-Za-z0-9_-]+/\1***/g' | tail -80
-        # `--debug` (temporal): muestra las llamadas a la API para entender el "Project not found"
+        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
