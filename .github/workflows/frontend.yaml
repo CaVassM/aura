@@ -98,6 +98,13 @@ jobs:
         if: steps.secretos.outputs.listos == 'true'
         run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
 
+      - name: Ver qué dejó la configuración del proyecto (sin valores secretos)
+        if: steps.secretos.outputs.listos == 'true'
+        run: |
+          ls -la .vercel .vercel/output | head -20
+          python3 -c "import json; d=json.load(open('.vercel/project.json')); print('claves:', sorted(d)); print('rootDirectory:', d.get('settings', {}).get('rootDirectory'))"
+
       - name: Publicar
         if: steps.secretos.outputs.listos == 'true'
-        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        run: npx --yes vercel@latest deploy --prebuilt --prod --debug --token="$VERCEL_TOKEN" 2>&1 | sed -E 's/(Bearer )[A-Za-z0-9_-]+/\1***/g' | tail -80
+        # `--debug` (temporal): muestra las llamadas a la API para entender el "Project not found"
