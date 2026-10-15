@@ -16,21 +16,21 @@ services:
       context: ./src/backend
     image: aura-backend:local
     restart: unless-stopped
+    # El agente (modelo, temperatura, contexto, razonamiento…) se configura en src/backend/.env, el mismo archivo que
+    # usa el backend fuera de Docker. Es opcional: sin él, valen los valores por defecto del código.
+    env_file:
+      - path: ./src/backend/.env
+        required: false
+    # Lo de abajo MANDA sobre env_file: son los valores que solo tienen sentido dentro del contenedor.
     environment:
       AURA_DATA_DIR: /data
+      # Ollama: el de tu PC. `localhost` dentro del contenedor sería el propio contenedor, por eso se fuerza el host.
+      # (Con el perfil `ollama`, pon AURA_OLLAMA_URL=http://ollama:11434 en el .env de la raíz.)
+      AURA_OLLAMA_URL: ${AURA_OLLAMA_URL:-http://host.docker.internal:11434}
       # Orígenes que pueden llamar a la API desde el navegador (tu dominio de Vercel, separados por coma)
       AURA_CORS_ORIGINS: ${AURA_CORS_ORIGINS:-}
       # Opcional: previsualizaciones de Vercel, p. ej.  https://aura-.*\.vercel\.app
       AURA_CORS_ORIGIN_REGEX: ${AURA_CORS_ORIGIN_REGEX:-}
-      # Ollama: por defecto el de tu PC (host.docker.internal); con el perfil `ollama`, http://ollama:11434
-      AURA_OLLAMA_URL: ${AURA_OLLAMA_URL:-http://host.docker.internal:11434}
-      AURA_OLLAMA_MODEL: ${AURA_OLLAMA_MODEL:-gemma4}
-      AURA_OLLAMA_TEMPERATURE: ${AURA_OLLAMA_TEMPERATURE:-0.2}
-      AURA_OLLAMA_NUM_CTX: ${AURA_OLLAMA_NUM_CTX:-8192}
-      AURA_OLLAMA_TIMEOUT: ${AURA_OLLAMA_TIMEOUT:-120}
-      AURA_OLLAMA_REASONING: ${AURA_OLLAMA_REASONING:-}
-      AURA_OLLAMA_KEEP_ALIVE: ${AURA_OLLAMA_KEEP_ALIVE:-30m}
-      AURA_LINEA_AYUDA: ${AURA_LINEA_AYUDA:-}
     volumes:
       # Data Pack (D1, D2, D6, D7…): solo lectura, no va dentro de la imagen
       - ${AURA_DATA_HOST_DIR:-./src/backend/data_pack}:/data:ro

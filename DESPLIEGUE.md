@@ -16,7 +16,7 @@ docker compose --profile tunnel up -d --build
 docker compose logs -f backend  # ver que arranca; /api/salud debe responder {"ok": true}
 ```
 
-- **Ollama** sigue corriendo en tu PC (no en Docker): el contenedor lo alcanza en `host.docker.internal:11434`. Si no responde, revisa que Ollama esté abierto y `AURA_OLLAMA_MODEL` sea el nombre exacto de `ollama list`. Para correr Ollama dentro de Docker con tu GPU: `--profile ollama` y `AURA_OLLAMA_URL=http://ollama:11434`.
+- **Ollama** sigue corriendo en tu PC (no en Docker): el contenedor lo alcanza en `host.docker.internal:11434` (la URL se fuerza aunque tu `src/backend/.env` diga `localhost`). El modelo y el resto del agente salen de `src/backend/.env`: `AURA_OLLAMA_MODEL` debe ser el nombre exacto de `ollama list`. Tras cambiarlo, `docker compose up -d` recrea el contenedor. Para correr Ollama dentro de Docker con tu GPU: `--profile ollama` y `AURA_OLLAMA_URL=http://ollama:11434`.
 - **Data Pack:** se monta en solo lectura desde `src/backend/data_pack` (o `AURA_DATA_HOST_DIR`); no va dentro de la imagen.
 - **Túnel con nombre (recomendado):** crea el túnel en Cloudflare Zero Trust, copia su token en `TUNNEL_TOKEN` y, en el panel, apunta el hostname público a `http://backend:8080`.
 - **Túnel rápido (pruebas):** `docker compose --profile tunnel-rapido up -d` y mira la URL `https://….trycloudflare.com` en `docker compose logs tunnel-rapido`. Cambia en cada arranque, así que habría que actualizar la variable en Vercel y volver a desplegar.
