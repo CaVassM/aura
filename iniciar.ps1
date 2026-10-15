@@ -86,7 +86,13 @@ function Buscar-Uv {
 Paso "Backend: entorno de Python (uv)"
 $uv = Buscar-Uv
 if (-not $uv) {
-    Falla "No encontre uv (gestor de dependencias del backend). Instalalo con: pip install uv   (o mira https://docs.astral.sh/uv/)"
+    # Instalador oficial de uv, con la misma version que usa el Dockerfile (asi no cambia nada del lock)
+    Aviso "No encontre uv. Lo instalo con el instalador oficial (version 0.13.1)..."
+    try { powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/0.13.1/install.ps1 | iex" } catch { }
+    $uv = Buscar-Uv
+}
+if (-not $uv) {
+    Falla "No pude instalar uv. Instalalo a mano con: powershell -c `"irm https://astral.sh/uv/0.13.1/install.ps1 | iex`"  y vuelve a ejecutar."
 }
 # uv sync instala exactamente lo que dice uv.lock: crea .venv si falta y quita lo que sobre.
 # --frozen: falla si uv.lock no coincide con pyproject.toml, en vez de cambiar versiones en silencio.
