@@ -137,7 +137,7 @@ Parámetros y respuestas: `src/backend/docs/api_agente.md`.
 ## 5. Conectar el backend
 
 1. Copia `.env.local.example` a `.env.local` (por defecto `http://localhost:8080`).
-2. Backend: `uvicorn app.main:app --port 8080` en `src/backend` (con `requirements-agente.txt` instalado) y
+2. Backend: `uvicorn app.main:app --port 8080` en `src/backend` (con el extra `agente` instalado (`uv sync --extra agente`)) y
    `ollama serve`.
 3. `npm run dev`.
 

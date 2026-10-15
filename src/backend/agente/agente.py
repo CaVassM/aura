@@ -33,7 +33,7 @@ def crear_modelo(config: ConfigAgente):
         from langchain_ollama import ChatOllama
     except ImportError as error:  # pragma: no cover
         raise AgenteNoDisponible(
-            "Falta langchain-ollama. Instala las dependencias del agente: pip install -r requirements-agente.txt"
+            "Falta langchain-ollama. Instala las dependencias del agente: uv sync --extra agente"
         ) from error
     return ChatOllama(
         model=config.modelo,
