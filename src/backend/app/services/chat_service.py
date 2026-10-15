@@ -213,5 +213,5 @@ def estado_ollama(config: ConfigAgente, dependencias: bool = True) -> dict:
     instalado = config.modelo in nombres
     detalle = "Listo." if instalado else f"Falta el modelo: ejecuta `ollama pull {config.modelo}`."
     if not dependencias:
-        detalle = "Faltan dependencias: pip install -r requirements-agente.txt"
+        detalle = "Faltan dependencias: uv sync --extra agente"
     return {**base, "ollama_disponible": True, "modelo_instalado": instalado, "detalle": detalle}

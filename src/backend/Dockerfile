@@ -2,20 +2,35 @@
 #   docker build -t aura-backend src/backend
 # El Data Pack NO va en la imagen: se monta como volumen en /data (AURA_DATA_DIR).
 # Ollama corre fuera del contenedor (en tu PC): AURA_OLLAMA_URL apunta a él.
+
+# Dependencias: pyproject.toml + uv.lock (versiones exactas). Ver pyproject.toml.
 FROM python:3.12-slim
 
+# Variables de entorno para Python, pip y uv.
+# PYTHONDONTWRITEBYTECODE=1: evita que Python cree archivos .pyc
+# PYTHONUNBUFFERED=1: evita buffering en stdout/stderr, asi los logs se ven en tiempo real.
+# PIP_NO_CACHE_DIR=1: evita que pip guarde cache de paquetes descargados.
+# PIP_DISABLE_PIP_VERSION_CHECK=1: evita que pip pierda tiempo revisando si hay una nueva version de pip desde el internet.
+# UV_PYTHON_DOWNLOADS=never: uv usa el Python 3.12 de la imagen, no descarga otro.
+# UV_LINK_MODE=copy: uv copia los paquetes en vez de enlazarlos (el cache no está en la imagen).
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_LINK_MODE=copy
 
+# Creamos un directorio de trabajo, este es el /app.
 WORKDIR /app
 
-# Dependencias primero (capa cacheable). matplotlib y pytest son solo de experimentos/pruebas: no van en runtime.
-COPY requirements.txt requirements-agente.txt ./
-RUN sed -e '/^matplotlib/d' -e '/^pytest/d' requirements.txt > requirements-runtime.txt \
-    && grep -v '^-r' requirements-agente.txt >> requirements-runtime.txt \
-    && pip install -r requirements-runtime.txt
+# uv instala exactamente lo que dice uv.lock (versión de uv fijada).
+RUN pip install --no-cache-dir uv==0.13.1
+
+# Dependencias primero (capa cacheable). --frozen falla si uv.lock no coincide con pyproject.toml.
+# --no-dev: sin pytest ni matplotlib. --extra agente: incluye LangChain + Ollama.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --extra agente --no-install-project
+ENV PATH="/app/.venv/bin:$PATH"
 
 COPY . .
 

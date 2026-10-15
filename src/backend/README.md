@@ -45,7 +45,7 @@ Desde `src/backend`, en PowerShell:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+uv sync
 uvicorn app.main:app --reload --port 8080
 ```
 
@@ -89,7 +89,7 @@ El Data Pack no se copia al repo salvo D1, D2, D6 y D7 en `data_pack/`; las resp
 | GET / DELETE | `/chat/{session_id}?estudiante_id=` | Releer o borrar una conversación |
 | GET | `/chat/estado` | Diagnóstico de Ollama y del modelo |
 
-Contrato con ejemplos JSON: [docs/api_coordinacion.md](docs/api_coordinacion.md). Contrato del chat y cómo instalar el agente: [docs/api_agente.md](docs/api_agente.md) (`pip install -r requirements-agente.txt`; sin eso, `/api/chat` responde 503 y el resto funciona).
+Contrato con ejemplos JSON: [docs/api_coordinacion.md](docs/api_coordinacion.md). Contrato del chat y cómo instalar el agente: [docs/api_agente.md](docs/api_agente.md) (`uv sync --extra agente`; sin eso, `/api/chat` responde 503 y el resto funciona).
 
 ## Parámetros de la demo (`config/parametros.yaml`)
 

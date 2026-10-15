@@ -1,0 +1,32 @@
+# Dependencias del backend de AURA. Fuente de verdad: este archivo + uv.lock (versiones exactas).
+#   Instalar (app + agente):  uv sync --extra agente
+#   Solo la app:              uv sync
+#   Cambiar una dependencia:  editar este archivo y luego `uv lock`; commitear pyproject.toml y uv.lock juntos.
+[project]
+name = "aura-backend"
+version = "0.1.0"
+description = "Backend de AURA (FastAPI + motor de asignación + agente conversacional)"
+requires-python = ">=3.12"
+# Mínimos = versiones probadas en el entorno de desarrollo. uv.lock fija las exactas.
+dependencies = [
+    "fastapi>=0.142.4",
+    "uvicorn>=0.54.0",
+    "httpx>=0.28.1",     # lo usa app/services/chat_service.py para hablar con Ollama
+    "pyyaml>=6.0.3",     # configuración YAML del motor
+    "numpy>=2.5.3",      # motor de asignación (fitness, reglas)
+]
+
+[project.optional-dependencies]
+# Agente conversacional (LangChain + Ollama). Sin este extra, /api/chat responde 503 y el resto funciona.
+agente = [
+    "langchain>=1.4.4,<2",
+    "langchain-ollama>=1.1.0,<2",
+    "python-dotenv>=1.2.4",  # lee el archivo .env (opcional)
+]
+
+[dependency-groups]
+# Solo para desarrollo: no van en la imagen Docker (uv sync --no-dev).
+dev = [
+    "pytest>=9.1.1",
+    "matplotlib>=3.11.2",    # solo para los gráficos de experimentos/
+]

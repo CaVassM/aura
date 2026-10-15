@@ -152,24 +152,22 @@ En la demo, Lucía cumple S1–S4 (4 puntos) y Diego S1, S2 y S4 (3); Mateo y Va
 
 ## Instalar y probar en tu PC
 
-Requisitos: Python 3.10+, [Ollama](https://ollama.com) con el modelo descargado (`ollama pull gemma4`; usa el nombre exacto de `ollama list`) y una versión reciente de Ollama (el soporte de herramientas de Gemma 4 se corrigió en versiones recientes).
+Requisitos: Python 3.12+ y `uv` (`pip install uv`, una vez), [Ollama](https://ollama.com) con el modelo descargado (`ollama pull gemma4`; usa el nombre exacto de `ollama list`) y una versión reciente de Ollama (el soporte de herramientas de Gemma 4 se corrigió en versiones recientes).
 
 ```powershell
-# desde src/backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements-agente.txt        # incluye requirements.txt
+# desde src/backend: crea .venv e instala exactamente lo de uv.lock (app + agente)
+uv sync --extra agente
 Copy-Item .env.example .env                   # opcional: cambia AURA_OLLAMA_MODEL si tu modelo se llama distinto
 
 ollama serve                                  # si Ollama no está abierto ya
-uvicorn app.main:app --reload --port 8080     # Swagger: http://localhost:8080/docs
+uv run uvicorn app.main:app --reload --port 8080   # Swagger: http://localhost:8080/docs
 ```
 
-Con `iniciar.bat` (raíz del repo) todo esto se hace solo: instala `requirements-agente.txt`, inicia Ollama si no está abierto, avisa si falta el modelo y muestra el estado del agente al arrancar.
+Con `iniciar.bat` (raíz del repo) todo esto se hace solo: instala el extra `agente` (`uv sync --extra agente`), inicia Ollama si no está abierto, avisa si falta el modelo y muestra el estado del agente al arrancar.
 
 Sin frontend, desde la terminal: `python -m app.cli_chat --distrito DIST_GAIA` (muestra también qué herramientas llamó el modelo).
 
-Si el backend arranca sin `requirements-agente.txt`, todo funciona excepto `/api/chat`, que responde `503` con el comando de instalación.
+Si el backend arranca sin el extra `agente`, todo funciona excepto `/api/chat`, que responde `503` con el comando de instalación.
 
 ### Variables de entorno (todas opcionales)
 

@@ -69,63 +69,40 @@ if ($Detener) {
     exit 0
 }
 
-# ---------------------------------------------------------------- Python
-function Buscar-Python {
-    $candidatos = @()
-    if ($env:AURA_PYTHON) { $candidatos += , @($env:AURA_PYTHON) }
-    $candidatos += , @("python")
-    $candidatos += , @("py", "-3")
-    foreach ($c in $candidatos) {
-        try {
-            $resto = @()
-            if ($c.Count -gt 1) { $resto = $c[1..($c.Count - 1)] }
-            $version = & $c[0] @resto -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
-            if ($LASTEXITCODE -eq 0 -and "$version" -match '^(\d+)\.(\d+)$') {
-                if ([int]$Matches[1] -gt 3 -or ([int]$Matches[1] -eq 3 -and [int]$Matches[2] -ge 10)) {
-                    return , $c
-                }
-            }
-        } catch { }
-    }
-    return $null
-}
-
 function Venv-Sano {
     if (-not (Test-Path $VenvPy)) { return $false }
     & $VenvPy -c "import fastapi, uvicorn, yaml, numpy" 2>$null
     return ($LASTEXITCODE -eq 0)
 }
 
-Paso "Backend: entorno de Python"
-$reqAgente = Join-Path $Back "requirements-agente.txt"   # incluye requirements.txt
-$huella = (Get-FileHash (Join-Path $Back "requirements.txt") -Algorithm SHA256).Hash + (Get-FileHash $reqAgente -Algorithm SHA256).Hash
-$archivoHuella = Join-Path $Back ".venv\requirements.sha256"
-
-if (-not (Venv-Sano)) {
-    $py = Buscar-Python
-    if (-not $py) { Falla "No encontre Python 3.10 o superior. Instalalo desde https://www.python.org/downloads/ (o define AURA_PYTHON)." }
-    if (Test-Path (Join-Path $Back ".venv")) {
-        Aviso "El entorno virtual (.venv) no funciona (por ejemplo, se creo con otra version de Python). Lo recreo."
-        Remove-Item -Recurse -Force (Join-Path $Back ".venv") -ErrorAction Stop
-    }
-    $resto = @()
-    if ($py.Count -gt 1) { $resto = $py[1..($py.Count - 1)] }
-    Write-Host "Creando .venv con $($py[0]) $resto"
-    Push-Location $Back
-    try { & $py[0] @resto -m venv .venv } finally { Pop-Location }
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $VenvPy)) { Falla "No pude crear el entorno virtual." }
-    Remove-Item $archivoHuella -ErrorAction SilentlyContinue
+function Buscar-Uv {
+    $cmd = Get-Command uv -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    # `pip install --user uv` lo deja en %APPDATA%\Python\...\Scripts, que a veces no esta en el PATH
+    $candidatos = @("$env:USERPROFILE\.local\bin\uv.exe") + @(Get-ChildItem "$env:APPDATA\Python\Python*\Scripts\uv.exe" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+    return ($candidatos | Where-Object { Test-Path $_ } | Select-Object -First 1)
 }
 
-if (-not ((Test-Path $archivoHuella) -and ((Get-Content $archivoHuella -Raw).Trim() -eq $huella))) {
-    Write-Host "Instalando dependencias del backend (puede tardar unos minutos la primera vez)..."
-    & $VenvPy -m pip install --disable-pip-version-check -q -r $reqAgente
-    if ($LASTEXITCODE -ne 0) { Falla "Fallo la instalacion de dependencias del backend y del agente (pip)." }
-    Set-Content -Path $archivoHuella -Value $huella
+Paso "Backend: entorno de Python (uv)"
+$uv = Buscar-Uv
+if (-not $uv) {
+    # Instalador oficial de uv, con la misma version que usa el Dockerfile (asi no cambia nada del lock)
+    Aviso "No encontre uv. Lo instalo con el instalador oficial (version 0.13.1)..."
+    try { powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/0.13.1/install.ps1 | iex" } catch { }
+    $uv = Buscar-Uv
 }
+if (-not $uv) {
+    Falla "No pude instalar uv. Instalalo a mano con: powershell -c `"irm https://astral.sh/uv/0.13.1/install.ps1 | iex`"  y vuelve a ejecutar."
+}
+# uv sync instala exactamente lo que dice uv.lock: crea .venv si falta y quita lo que sobre.
+# --frozen: falla si uv.lock no coincide con pyproject.toml, en vez de cambiar versiones en silencio.
+Write-Host "Sincronizando dependencias del backend con uv.lock (rapido si ya estaban)..."
+Push-Location $Back
+try { & $uv sync --frozen --extra agente 2>&1 | ForEach-Object { "$_" } } finally { Pop-Location }
+if ($LASTEXITCODE -ne 0) { Falla "Fallo uv sync del backend. Revisa el error de arriba." }
 if (-not (Venv-Sano)) { Falla "El entorno del backend sigue sin funcionar. Borra src\backend\.venv y vuelve a ejecutar." }
 & $VenvPy -c "import langchain, langchain_ollama" 2>$null
-if ($LASTEXITCODE -ne 0) { Aviso "No se pudieron importar LangChain / langchain-ollama: el chat respondera 503 hasta que se instalen (pip install -r src\backend\requirements-agente.txt)." }
+if ($LASTEXITCODE -ne 0) { Aviso "No se pudieron importar LangChain / langchain-ollama: el chat respondera 503 hasta que se instalen (cd src\backend ; uv sync --extra agente)." }
 Write-Host "Backend listo."
 
 # ---------------------------------------------------------------- Node

@@ -74,7 +74,7 @@ def get_agente(request: Request):
         if getattr(request.app.state, "agente", None) is None:
             if not dependencias_agente():
                 raise AgenteNoDisponibleError(
-                    "Faltan las dependencias del agente. Ejecuta: pip install -r requirements-agente.txt"
+                    "Faltan las dependencias del agente. Ejecuta: uv sync --extra agente"
                 )
             from agente.agente import AgenteAura
 
