@@ -41,7 +41,7 @@ class ConfigAgente:
     AURA_OLLAMA_TIMEOUT, AURA_OLLAMA_REASONING, AURA_OLLAMA_KEEP_ALIVE, AURA_LINEA_AYUDA, AURA_AGENTE_MAX_PASOS,
     AURA_AGENTE_MAX_TURNOS."""
 
-    modelo: str = "gemma4"
+    modelo: str = "qwen3.5:4b"
     url: str = "http://localhost:11434"
     temperatura: float = 0.2
     num_ctx: int = 8192  # el contexto por defecto de Ollama no alcanza para prompt + herramientas

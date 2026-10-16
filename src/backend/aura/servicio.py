@@ -35,9 +35,16 @@ class ServicioAsignacion:
         """Ejecuta una llamada de herramienta tal como la emite el LLM."""
         return self._herramientas.ejecutar(nombre, argumentos)
 
-    def proponer_opciones(self, solicitud: dict, k: int = 3, excluir_servicios=None) -> dict:
-        """Hasta k propuestas válidas, sin reservarlas (sin los cupos de `excluir_servicios`, los de modo lote)."""
-        return self._herramientas.proponer_opciones(solicitud, k, excluir_servicios)
+    def proponer_opciones(
+        self, solicitud: dict, k: int = 3, excluir_servicios=None, servicios_lote=None, ventana_lote_s: int | None = None
+    ) -> dict:
+        """Hasta `max_opciones` (3) propuestas válidas, sin reservarlas. Los `servicios_lote` (en modo lote) salen como
+        una sola opción de tipo `lote` por servicio; `excluir_servicios` los aparta del todo."""
+        return self._herramientas.proponer_opciones(solicitud, k, excluir_servicios, servicios_lote, ventana_lote_s)
+
+    def lote_compatible(self, solicitud: dict, servicios_lote) -> list[str]:
+        """Servicios en modo lote con algún cupo compatible con la solicitud."""
+        return self._herramientas.lote_compatible(solicitud, servicios_lote)
 
     def planificar_lote(
         self, solicitudes: list[dict], poblacion: int = 40, generaciones: int = 100, semilla: int = 42
@@ -52,6 +59,15 @@ class ServicioAsignacion:
             modelo, _ = self._herramientas.convertir_solicitud(entrada)
             modelos.append(replace(modelo, id=f"{posicion:03d}|{modelo.id}"))
         return planificar_lote(self._agenda, modelos, poblacion, generaciones, semilla)
+
+    def tipo_de_opcion(self, opcion_id: str) -> str | None:
+        """Tipo de servicio de una opción `<cupo>|<canal>` o `LOTE|<servicio>`; None si el id no existe."""
+        clave, _, resto = opcion_id.partition("|")
+        if clave == "LOTE":
+            servicio = self._agenda.servicio_por_id.get(resto)
+            return servicio.tipo if servicio else None
+        cupo = self._agenda.cupo_por_id.get(clave)
+        return cupo.tipo if cupo else None
 
     def reservar(
         self, estudiante_id: str, opcion_id: str, servicio_ideal: str | None = None

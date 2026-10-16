@@ -10,7 +10,7 @@
 # Prepara todo lo que falte: crea o repara el entorno virtual del backend, instala sus
 # dependencias (incluidas las del agente: LangChain y langchain-ollama) y las del frontend, y copia .env.local.
 # Si Ollama no esta abierto, lo inicia (y lo cierra al salir solo si lo inicio este script) y avisa si falta
-# el modelo (AURA_OLLAMA_MODEL, por defecto gemma4; se lee del entorno o de src\backend\.env).
+# el modelo (AURA_OLLAMA_MODEL, por defecto qwen3.5:4b; se lee del entorno o de src\backend\.env).
 # Ctrl+C detiene los dos servidores.
 # Los logs quedan en la carpeta logs\. (Texto sin tildes a proposito: PowerShell 5.1 lee mal UTF-8.)
 
@@ -168,7 +168,7 @@ function Ollama-Modelos($url) {
 }
 
 $UrlOllama = (Leer-Config "AURA_OLLAMA_URL" "http://localhost:11434").TrimEnd("/")
-$ModeloAgente = Leer-Config "AURA_OLLAMA_MODEL" "gemma4"
+$ModeloAgente = Leer-Config "AURA_OLLAMA_MODEL" "qwen3.5:4b"
 $ollama = $null   # solo si lo inicia este script
 
 Paso "Agente: Ollama ($ModeloAgente)"

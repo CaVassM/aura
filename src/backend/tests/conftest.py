@@ -32,6 +32,14 @@ def estado_fresco(settings):
 
 
 @pytest.fixture()
+def sin_modo_lote(estado_fresco):
+    """Umbral inalcanzable: ningún servicio está en modo lote. Para las pruebas que reservan un cupo directo (en la demo
+    de estrés casi toda la consejería se acerca al umbral de 75 % (3 de 15 servicios quedan en modo lote)."""
+    estado_fresco.parametros["modo_lote_umbral_utilizacion"] = 1e6
+    return estado_fresco
+
+
+@pytest.fixture()
 def client_fresco(estado_fresco, settings):
     with TestClient(create_app(settings, estado_fresco)) as cliente:
         yield cliente

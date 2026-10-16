@@ -1,9 +1,9 @@
 """Modo lote (docs/como_funciona.md §8).
 
 Un servicio entra en modo lote cuando su utilización (cupos reservados / cupos liberados de la agenda abierta)
-llega al umbral (`modo_lote_umbral_utilizacion`, 75 %). Sus cupos dejan de ofrecerse uno a uno: una solicitud que
-solo encuentra servicios en lote espera en el **lote abierto**, que se cierra solo a los `lote.ventana_segundos`
-de entrar la primera solicitud, o apenas junta `lote.tamano_maximo`. Al cerrarse, el algoritmo genético asigna
+llega al umbral (`modo_lote_umbral_utilizacion`, un solo valor en el YAML: 75 %). Sus cupos dejan de ofrecerse uno a
+uno y el servicio sale en las propuestas como UNA opción de tipo `lote`: quien la elige espera en el **lote abierto**,
+que se cierra solo a los `lote.ventana_segundos` de entrar la primera solicitud, o apenas junta `lote.tamano_maximo`. Al cerrarse, el algoritmo genético asigna
 todas las solicitudes en conjunto (`aura.herramientas.lote`), la plataforma reserva las citas y avisa a cada
 estudiante. Todo vive en RAM.
 """
@@ -15,7 +15,7 @@ from ..repositories.app_state import AppState
 from ..repositories.lote_repository import Lote, SolicitudLote
 from ..schemas.citas import cita_out
 from .actividad_service import ActividadService
-from .errors import InvalidRequestError, PlatformError, YaEnLoteError
+from .errors import InvalidRequestError, PlatformError, YaEnLoteError, YaTieneCitaError
 from .etiquetas import Etiquetas
 from .ocupacion import embudo_por_servicio, en_lote, porcentaje, umbral_lote
 
@@ -42,6 +42,10 @@ class LoteService:
         _, _, por_servicio = embudo_por_servicio(self._e)
         return {sid for sid, f in por_servicio.items() if en_lote(self._e, f["reservados"], f["liberados"])}
 
+    @property
+    def ventana_s(self) -> int:
+        return int(self._cfg["ventana_segundos"])
+
     def info_oferta(self) -> dict:
         """Lo que necesita saber quien busca cita cuando solo hay servicios en lote."""
         lote = self._e.lotes.abierto
@@ -56,20 +60,37 @@ class LoteService:
 
     # --- entrar al lote ---
 
-    def entrar(self, estudiante_id: str, solicitud: dict, sesion_id: str | None = None, origen: str = "chat") -> dict:
-        """Pone la solicitud en el lote abierto (lo abre si no hay). Solo vale si la búsqueda directa no tiene
-        opciones y los servicios compatibles están en modo lote."""
+    def entrar(
+        self,
+        estudiante_id: str,
+        solicitud: dict,
+        sesion_id: str | None = None,
+        origen: str = "chat",
+        service_id: str | None = None,
+        reemplazar: bool = False,
+    ) -> dict:
+        """Pone la solicitud en el lote abierto (lo abre si no hay). Vale cuando algún servicio compatible está en modo
+        lote (o el `service_id` indicado lo está). Entrar a un lote nunca registra un desencuentro.
+
+        R7: si ya tiene una cita activa de ese tipo de servicio falla con `ya_tiene_cita`; con `reemplazar`, esa cita se
+        cancela cuando el lote le asigne la nueva."""
         from .citas_service import CitasService
 
         solicitud = {**solicitud, "estudiante_id": estudiante_id}
-        propuesta = CitasService(self._e).proponer(solicitud, 1)
-        if not propuesta.get("lote"):  # sin oferta de lote: o hay opciones directas o no hay nada
-            detalle = (
-                "Hay opciones directas: reserva una; el lote es solo para servicios con ocupación alta."
-                if propuesta["opciones"]
-                else "No hay cupos compatibles, ni siquiera en lote."
-            )
-            raise InvalidRequestError(detalle)
+        try:
+            compatibles = self._e.motor.lote_compatible(solicitud, self.servicios_en_lote())
+        except (KeyError, ValueError, TypeError) as error:
+            raise InvalidRequestError(str(error)) from error
+        if service_id and service_id not in compatibles:
+            raise InvalidRequestError(f"{service_id} no está en modo lote o no tiene cupos compatibles con tus preferencias.")
+        if not compatibles:
+            raise InvalidRequestError("No hay servicios en modo lote con cupos compatibles; reserva una opción directa.")
+        elegido = service_id or compatibles[0]
+        servicio = self._e.motor.servicio(elegido)
+        ideal = self._e.tablas["motivo_a_servicio"].get(solicitud.get("motivo", ""))
+        if servicio and servicio["tipo"] == ideal:  # eligió el servicio ideal: no se le asigna uno alternativo
+            solicitud["solo_servicio_ideal"] = True
+        previa = CitasService(self._e).verificar_equidad(estudiante_id, servicio["tipo"] if servicio else None, reemplazar)
 
         repo = self._e.lotes
         ventana = int(self._cfg["ventana_segundos"])
@@ -87,7 +108,8 @@ class LoteService:
                 lote.timer = temporizador
                 temporizador.start()
             entrada = SolicitudLote(
-                estudiante_id, solicitud, sesion_id, len(lote.solicitudes) + 1, _iso(ahora), origen
+                estudiante_id, solicitud, sesion_id, len(lote.solicitudes) + 1, _iso(ahora), origen,
+                reemplaza=previa.id if previa else None,
             )
             lote.solicitudes.append(entrada)
             lleno = len(lote.solicitudes) >= int(self._cfg["tamano_maximo"])
@@ -140,17 +162,31 @@ class LoteService:
         citas = CitasService(self._e)
         asignadas: list[tuple[SolicitudLote, dict, object]] = []
         sin_cupo: list[SolicitudLote] = [por_clave[c] for c in plan["sin_cupo"]]
+        ya_tienen: list[SolicitudLote] = []  # R7: mientras esperaba tomó otra cita de ese tipo; se queda con ella
         for a in plan["asignaciones"]:
             sl = por_clave[a["solicitud_id"]]
             ideal = self._e.tablas["motivo_a_servicio"].get(sl.solicitud.get("motivo", ""))
             try:
-                cita = citas.reservar(sl.estudiante_id, a["opcion_id"], ideal, origen="lote")
+                cita = citas.reservar(sl.estudiante_id, a["opcion_id"], ideal, origen="lote", reemplazar=bool(sl.reemplaza))
+            except YaTieneCitaError:
+                ya_tienen.append(sl)
+                continue
             except PlatformError:  # no debería pasar (se asigna con el candado tomado); se trata como sin cupo
                 sin_cupo.append(sl)
                 continue
             asignadas.append((sl, a, cita))
+        # Entrar a un lote nunca es un desencuentro. Quien no recibió cupo solo lo es si ya no existe NINGÚN cupo
+        # compatible (ni normal ni en lote); si queda alguno, se le ofrecen esas opciones.
+        con_alternativas: list[tuple[SolicitudLote, list[dict]]] = []
+        desencuentros: list[SolicitudLote] = []
         for sl in sin_cupo:
-            citas.registrar_desencuentro(sl.solicitud, origen="lote")
+            amplia = {k: v for k, v in sl.solicitud.items() if k != "solo_servicio_ideal"}  # esa marca la puso el lote
+            opciones = citas.proponer(amplia, self._e.parametros.get("max_opciones", 3))["opciones"]
+            if opciones:
+                con_alternativas.append((sl, opciones))
+            else:
+                desencuentros.append(sl)
+                citas.registrar_desencuentro(sl.solicitud, origen="lote")
 
         lote.resultado = {
             "asignados": len(asignadas),
@@ -190,22 +226,49 @@ class LoteService:
             texto = (
                 f"Tu lote se resolvió y quedaste con {a['servicio_nombre']} el {self._etiquetas.fecha_texto(a['fecha'])}, "
                 f"de {a['hora_inicio']} a {a['hora_fin']} ({self._etiquetas.canal(a['canal']).lower()}). "
-                f"Tu número de cita es {cita.id}."
+                f"Tu número de cita es {cita.id}. "
+                + self._etiquetas.confirmacion_canal(a["canal"], a["servicio_nombre"], a["distrito"])
             )
             self._avisar(sl, "lote_asignada", texto, cita=cita_out(cita).model_dump())
-        for sl in sin_cupo:
+        for sl in desencuentros:
             texto = (
                 "Tu lote se resolvió, pero no quedó un cupo compatible con tus preferencias. Avisé al equipo de "
-                "coordinación para ampliar la oferta. Si quieres, busco de nuevo con otros días u horarios."
+                "coordinación para ampliar la oferta. Si quieres, te anoto en la lista de espera por si se libera un cupo."
             )
             self._avisar(sl, "lote_sin_cupo", texto)
+        for sl, opciones in con_alternativas:
+            lista = " ".join(f"{i}) {self._texto_opcion(o)}." for i, o in enumerate(opciones, 1))
+            texto = (
+                "Tu lote se resolvió, pero esta vez no quedó un cupo para ti. Con tus preferencias todavía hay estas "
+                f"opciones: {lista} Dime cuál prefieres y la reservo."
+            )
+            self._avisar(sl, "lote_sin_cupo", texto, opciones=opciones)
+        for sl in ya_tienen:
+            self._avisar(
+                sl,
+                "lote_sin_cupo",
+                "Tu lote se resolvió, pero ya tienes una cita de ese tipo de servicio, así que la mantuve y no reservé otra.",
+            )
         self._actividad.lote_evento("lote_resuelto", self._resumen(lote), None, "lote")
 
-    def _avisar(self, sl: SolicitudLote, tipo: str, texto: str, cita: dict | None = None) -> None:
+    def _texto_opcion(self, o: dict) -> str:
+        """Una opción de `proponer` en una línea (la de lote no tiene día ni hora: los decide el lote)."""
+        if o.get("tipo_opcion") == "lote":
+            return f"{o['servicio_nombre']} ({o['tipo_label']}), asignación en grupo: el día y la hora los decide el lote"
+        return (
+            f"{o['servicio_nombre']} ({o['tipo_label']}), {self._etiquetas.fecha_texto(o['fecha'])}, de "
+            f"{o['hora_inicio']} a {o['hora_fin']}, {o['canal_label'].lower()}"
+        )
+
+    def _avisar(
+        self, sl: SolicitudLote, tipo: str, texto: str, cita: dict | None = None, opciones: list[dict] | None = None
+    ) -> None:
         """Aviso en vivo al estudiante y nota en su conversación (para que el agente sepa qué pasó)."""
         datos = {"mensaje": texto}
         if cita:
             datos["cita"] = cita
+        if opciones:
+            datos["opciones"] = opciones
         self._e.avisos.agregar(sl.estudiante_id, tipo, datos)
         sesion = self._e.chats.obtener(sl.sesion_id) if sl.sesion_id else None
         if sesion is None:
@@ -217,6 +280,10 @@ class LoteService:
                 from langchain_core.messages import AIMessage
 
                 sesion.mensajes.append(AIMessage(texto))
+                if opciones:  # para que «la 1» reserve la opción que se le ofreció
+                    sesion.propuestas = {o["opcion_id"]: o for o in opciones}
+                    sesion.ultima_solicitud = sl.solicitud
+                    sesion.servicio_ideal = self._e.tablas["motivo_a_servicio"].get(sl.solicitud.get("motivo", ""))
             except ImportError:  # sin LangChain no hay chat que actualizar
                 pass
             finally:

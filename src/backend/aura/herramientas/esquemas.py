@@ -59,6 +59,10 @@ def _campo_solicitud(distritos: list[str] | None = None, motivos: list[str] | No
                 "type": "string",
                 "description": "Fecha ISO AAAA-MM-DD; opcional, por defecto hoy",
             },
+            "service_id_preferido": {
+                "type": "string",
+                "description": "Opcional: servicio que la persona pidió por nombre o id (p. ej. «Brújula»); sus opciones salen primero",
+            },
         },
         "required": [
             "estudiante_id",
@@ -96,7 +100,7 @@ def esquemas_herramientas(
     return [
         _herramienta(
             "proponer_opciones",
-            "Busca citas compatibles con las preferencias de la persona y devuelve hasta k opciones "
+            "Busca citas compatibles con las preferencias de la persona y devuelve hasta k opciones (máximo 3) "
             "ordenadas de mejor a peor. No reserva ni retiene el cupo. Si no hay opciones, devuelve "
             "`motivo_vacio` y una `sugerencia`.",
             {
@@ -104,7 +108,7 @@ def esquemas_herramientas(
                 "k": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 20,
+                    "maximum": 3,
                     "default": 3,
                     "description": "Cuántas opciones devolver",
                 },

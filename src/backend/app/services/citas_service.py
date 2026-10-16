@@ -6,7 +6,7 @@ from .actividad_service import ActividadService
 from .etiquetas import Etiquetas
 from .lista_espera_service import ListaEsperaService
 from .lote_service import LoteService
-from .errors import InvalidRequestError, NotFoundError, SlotTakenError
+from .errors import InvalidRequestError, NotFoundError, SlotTakenError, YaTieneCitaError
 
 
 class CitasService:
@@ -18,36 +18,69 @@ class CitasService:
         self._actividad = ActividadService(estado)
 
     def proponer(self, solicitud: dict, k: int = 3) -> dict:
-        """Opciones compatibles sin reservar; una solicitud inválida es un 422.
+        """Hasta `max_opciones` (3) opciones compatibles sin reservar; una solicitud inválida es un 422.
 
-        Los servicios en modo lote (utilización ≥ umbral) no se ofrecen uno a uno. Si lo único compatible está en
-        modo lote, no hay opciones y se devuelve `motivo_vacio: "servicios_en_lote"` con los datos del lote."""
+        El servicio ideal (o el que la persona nombró en `service_id_preferido`) va primero y las alternativas afines solo
+        completan. Un servicio en modo lote (utilización ≥ umbral) no se oculta: sale como UNA opción de tipo `lote`
+        (`opcion_id` = `LOTE|<servicio>`), ordenada con el costo de su mejor cupo. Trae `mensaje` para los casos
+        especiales (sin cupos, servicio en lote, servicio pedido sin cupo)."""
         lotes = LoteService(self._estado)
-        en_lote = lotes.servicios_en_lote()
-        resultado = self._estado.motor.proponer_opciones(solicitud, k, excluir_servicios=en_lote)
+        resultado = self._estado.motor.proponer_opciones(
+            solicitud, k, servicios_lote=lotes.servicios_en_lote(), ventana_lote_s=lotes.ventana_s
+        )
         if resultado.get("motivo_vacio") == "solicitud_invalida":
             raise InvalidRequestError(resultado.get("detalle", ""))
-        if not resultado["opciones"] and en_lote:
-            con_lote = self._estado.motor.proponer_opciones(solicitud, 10)
-            if con_lote["opciones"]:
-                nombres = list(dict.fromkeys(o["servicio_nombre"] for o in con_lote["opciones"]))
-                return {
-                    "opciones": [],
-                    "motivo_vacio": "servicios_en_lote",
-                    "servicio_ideal": con_lote["servicio_ideal"],
-                    "lote": {**lotes.info_oferta(), "servicios": nombres[:3]},
-                }
-        elif resultado["opciones"] and en_lote and not any(not o["es_alternativa"] for o in resultado["opciones"]):
-            # Lo que se muestra son servicios alternativos, pero el servicio ideal sí tiene plazas: están en lote.
-            # Quien quiere ese servicio y no otro puede entrar al lote; se ofrece junto a las opciones directas.
-            del_ideal = self._estado.motor.proponer_opciones({**solicitud, "solo_servicio_ideal": True}, 20)
-            nombres = list(dict.fromkeys(o["servicio_nombre"] for o in del_ideal["opciones"] if o["service_id"] in en_lote))
-            if nombres:
-                resultado["lote"] = {**lotes.info_oferta(), "servicios": nombres[:3]}
-                resultado["lote_para_ideal"] = True
-        for opcion in resultado["opciones"]:
+        otra = (resultado.get("preferido") or {}).get("mejor_alternativa_mismo_tipo")
+        for opcion in resultado["opciones"] + ([otra] if otra else []):
             opcion["tipo_label"] = self._etiquetas.tipo(opcion["tipo"])
         return resultado
+
+    # --- R7: equidad ---
+
+    def cita_activa_de_tipo(self, estudiante_id: str, tipo: str) -> Cita | None:
+        """La cita activa (confirmada y por venir) que ya ocupa el cupo permitido de ese tipo de servicio, si lo ocupa.
+
+        R7: máximo `max_citas_activas_por_tipo` (1) por persona y tipo de servicio dentro del horizonte."""
+        maximo = int(self._estado.parametros.get("max_citas_activas_por_tipo", 1))
+        hoy = self._estado.hoy.isoformat()
+        activas = sorted(
+            (c for c in self.listar(estudiante_id) if c.estado == "confirmada" and c.tipo == tipo and c.fecha >= hoy),
+            key=lambda c: (c.fecha, c.hora_inicio),
+        )
+        return activas[0] if len(activas) >= maximo else None
+
+    def datos_cita(self, cita: Cita) -> dict:
+        """La cita tal como la ve quien consulta el conflicto: servicio, día, hora y canal."""
+        return {
+            "id": cita.id,
+            "servicio_nombre": cita.servicio_nombre,
+            "tipo": cita.tipo,
+            "tipo_label": cita.tipo_label,
+            "distrito": cita.distrito,
+            "fecha": cita.fecha,
+            "dia_semana": self._etiquetas.fecha_texto(cita.fecha).split(" ")[0],
+            "hora_inicio": cita.hora_inicio,
+            "hora_fin": cita.hora_fin,
+            "canal": cita.canal,
+            "canal_label": self._etiquetas.canal(cita.canal),
+        }
+
+    def mensaje_ya_tiene(self, cita: Cita) -> str:
+        dia, numero = self._etiquetas.fecha_texto(cita.fecha).split(" ")[:2]
+        return (
+            f"Ya tienes una cita de {cita.tipo_label.lower()} el {dia} {numero} a las {cita.hora_inicio}. "
+            "¿Quieres cambiarla por esta?"
+        )
+
+    def verificar_equidad(self, estudiante_id: str, tipo: str | None, reemplazar: bool = False) -> Cita | None:
+        """R7. Sin conflicto devuelve None; con conflicto y `reemplazar`, la cita que se cancelará al reservar la nueva;
+        con conflicto y sin `reemplazar`, `ya_tiene_cita`."""
+        previa = self.cita_activa_de_tipo(estudiante_id, tipo) if tipo else None
+        if previa and not reemplazar:
+            raise YaTieneCitaError(self.datos_cita(previa), self.mensaje_ya_tiene(previa))
+        return previa
+
+    # --- reservar ---
 
     def reservar(
         self,
@@ -55,11 +88,14 @@ class CitasService:
         opcion_id: str,
         servicio_ideal: str | None = None,
         origen: str = "api",
+        reemplazar: bool = False,
     ) -> Cita:
         """Reserva en el motor y registra la cita; visible de inmediato en coordinación.
 
-        `origen` (`api` o `chat`) solo sirve para el registro de actividad en vivo."""
+        R7: si ya tiene una cita activa de ese tipo de servicio, falla con `ya_tiene_cita`; con `reemplazar` se reserva la
+        nueva y se cancela la anterior en la misma operación. `origen` solo sirve para el registro de actividad."""
         with self._estado.lock:
+            previa = self.verificar_equidad(estudiante_id, self._estado.motor.tipo_de_opcion(opcion_id), reemplazar)
             resultado = self._estado.motor.reservar(estudiante_id, opcion_id, servicio_ideal)
             if resultado.get("error") == "cupo_fuera_de_ventana":
                 raise InvalidRequestError("El cupo está fuera de la ventana de reserva (hoy + 1 a hoy + 14 días)")
@@ -69,7 +105,41 @@ class CitasService:
                 raise SlotTakenError(opcion_id)
             cita = self._estado.citas.add(Cita.desde_comprobante(resultado["cita"], self._etiquetas.tipo))
             self._actividad.cita_reservada(cita, resultado["cita"], origen)
+            if previa:  # «cambiarla»: la anterior se libera solo ahora que la nueva quedó reservada
+                self.cancelar(previa.id, estudiante_id, origen)
             return cita
+
+    def reservar_opcion(
+        self,
+        estudiante_id: str,
+        opcion_id: str,
+        servicio_ideal: str | None = None,
+        origen: str = "chat",
+        solicitud: dict | None = None,
+        sesion_id: str | None = None,
+        reemplazar: bool = False,
+    ) -> dict:
+        """Reserva cualquier opción de `proponer`: un cupo (`estado: confirmada`, con la cita) o un servicio en lote
+        (`estado: pendiente`: la solicitud queda inscrita en el lote y el resultado llega después al chat)."""
+        clave, _, service_id = opcion_id.partition("|")
+        if clave != "LOTE":
+            return {"estado": "confirmada", "cita": self.reservar(estudiante_id, opcion_id, servicio_ideal, origen, reemplazar)}
+        if not solicitud:
+            raise InvalidRequestError("Para entrar a un lote hace falta la solicitud con las preferencias de la persona")
+        entrada = LoteService(self._estado).entrar(
+            estudiante_id, solicitud, sesion_id, origen, service_id=service_id, reemplazar=reemplazar
+        )
+        servicio = self._estado.motor.servicio(service_id)
+        nombre = servicio["nombre"] if servicio else service_id
+        return {
+            "estado": "pendiente",
+            "lote": entrada["lote"],
+            "servicio_nombre": nombre,
+            "mensaje": (
+                f"Quedaste en el lote de {nombre}. Se asigna en conjunto y se cierra solo en unos segundos (o antes si se "
+                "llena): te aviso aquí con tu cita."
+            ),
+        }
 
     def listar(self, estudiante_id: str) -> list[Cita]:
         return self._estado.citas.list_by_student(estudiante_id)
@@ -87,9 +157,23 @@ class CitasService:
                 ListaEsperaService(self._estado).revisar()  # el cupo liberado puede servirle a alguien que espera
             return cita
 
-    def registrar_desencuentro(self, solicitud: dict, origen: str = "api") -> dict:
-        """Guarda en el motor una solicitud sin opciones y deja el aviso en la actividad en vivo."""
+    def registrar_desencuentro(self, solicitud: dict, origen: str = "api", verificar: bool = False) -> dict:
+        """Guarda en el motor una solicitud sin opciones y deja el aviso en la actividad en vivo.
+
+        Un desencuentro es que NO exista ningún cupo compatible, ni normal ni en lote, dentro de la ventana y las
+        restricciones de la persona. Con `verificar` se comprueba antes (sin la fecha concreta ni el servicio pedido, que
+        solo son preferencias) y, si existe alguno, se rechaza con `hay_cupos_compatibles`."""
         with self._estado.lock:
+            if verificar:
+                amplia = {k: v for k, v in solicitud.items() if k not in ("fecha", "service_id_preferido")}
+                lotes = LoteService(self._estado)
+                hay = self._estado.motor.proponer_opciones(amplia, 1, servicios_lote=lotes.servicios_en_lote())
+                if hay.get("opciones"):
+                    return {
+                        "ok": False,
+                        "error": "hay_cupos_compatibles",
+                        "detalle": "Hay cupos compatibles (también por lote): eso no es un desencuentro. Muéstrale las opciones.",
+                    }
             resultado = self._estado.motor.registrar_desencuentro(solicitud)
             if resultado.get("ok"):
                 fila = next(d for d in reversed(self._estado.desencuentros) if d["registro_id"] == resultado["registro_id"])

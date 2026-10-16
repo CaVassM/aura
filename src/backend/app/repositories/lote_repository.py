@@ -14,6 +14,7 @@ class SolicitudLote:
     posicion: int  # orden de llegada dentro del lote (desde 1)
     entrada_en: str  # ISO UTC
     origen: str  # chat | api
+    reemplaza: str | None = None  # cita de la misma persona que se cancela si el lote le asigna otra (R7, «cambiarla»)
 
     @property
     def clave(self) -> str:

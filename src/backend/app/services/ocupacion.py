@@ -9,7 +9,8 @@
   primer pedido (semana del demo).
 - `semana` (opcional) acota a una semana Lun–Dom: los cupos a esa semana dentro de la agenda
   abierta, y las citas a las solicitadas en ella.
-- Los umbrales de nivel salen de `coordinacion.nivel_ocupacion` en parametros.yaml.
+- El corte de ocupación «baja» sale de `coordinacion.nivel_ocupacion`; «alta» es el umbral del modo lote
+  (`modo_lote_umbral_utilizacion`), un solo valor en parametros.yaml.
 """
 
 from collections import defaultdict
@@ -53,12 +54,21 @@ def en_lote(estado: AppState, reservados: int, liberados: int) -> bool:
     return liberados > 0 and reservados / liberados >= umbral_lote(estado)
 
 
+def umbrales_nivel(estado: AppState) -> dict[str, float]:
+    """Cortes de la ocupación en %: `baja` bajo el primero; `alta` desde el segundo, que es el umbral del modo lote
+    (un solo valor en el YAML: un servicio «alta» es un servicio «en lote»)."""
+    return {
+        "baja_menor_que": float(estado.parametros["coordinacion"]["nivel_ocupacion"]["baja_menor_que"]),
+        "alta_desde": round(100 * umbral_lote(estado), 1),
+    }
+
+
 def nivel(estado: AppState, pct: float) -> str:
-    """`baja` bajo el primer umbral, `alta` sobre el segundo y `media` en medio."""
-    umbrales = estado.parametros["coordinacion"]["nivel_ocupacion"]
+    """`baja` bajo el primer umbral, `alta` desde el umbral de lote y `media` en medio."""
+    umbrales = umbrales_nivel(estado)
     if pct < umbrales["baja_menor_que"]:
         return "baja"
-    return "alta" if pct > umbrales["alta_mayor_que"] else "media"
+    return "alta" if pct >= umbrales["alta_desde"] else "media"
 
 
 def rango_de_cupos(estado: AppState, semana: date | None) -> tuple[date, date]:

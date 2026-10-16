@@ -33,7 +33,12 @@ def test_demo_estado(client, estado_sembrado):
     assert date.fromisoformat(datos["agenda_abierta_inicio"]) == hoy + timedelta(days=1)  # lo reservable
     assert date.fromisoformat(datos["agenda_abierta_fin"]) == fin
     assert "% vespertinos que trabajan" in datos["etiqueta"]
-    assert datos["umbrales_nivel"] == estado_sembrado.parametros["coordinacion"]["nivel_ocupacion"]
+    # «alta» es el umbral del modo lote: un solo valor en el YAML (75 %)
+    assert datos["umbrales_nivel"] == {
+        "baja_menor_que": estado_sembrado.parametros["coordinacion"]["nivel_ocupacion"]["baja_menor_que"],
+        "alta_desde": 100 * estado_sembrado.parametros["modo_lote_umbral_utilizacion"],
+    }
+    assert datos["umbrales_nivel"]["alta_desde"] == 75
 
 
 def test_resumen_es_coherente_con_el_estado(client, estado_sembrado):
@@ -53,11 +58,11 @@ def test_resumen_es_coherente_con_el_estado(client, estado_sembrado):
     assert k["desencuentros"] == len(estado_sembrado.desencuentros)
     assert k["espera_linea_base_dias"] == pytest.approx(estado_sembrado.espera_linea_base_dias, abs=0.005)
     assert datos["agenda_abierta"]["desde"] == (estado_sembrado.hoy + timedelta(days=1)).isoformat()
-    umbrales = estado_sembrado.parametros["coordinacion"]["nivel_ocupacion"]
+    umbrales = client.get("/api/demo/estado").json()["umbrales_nivel"]
     for s in servicios:
         esperado = (
             "baja" if s["ocupacion_pct"] < umbrales["baja_menor_que"]
-            else "alta" if s["ocupacion_pct"] > umbrales["alta_mayor_que"]
+            else "alta" if s["ocupacion_pct"] >= umbrales["alta_desde"]
             else "media"
         )  # fmt: skip
         assert s["nivel"] == esperado
@@ -246,11 +251,15 @@ def test_reglas(client, estado_sembrado):
         assert isinstance(r[bloque]["provisional"], bool)
     assert r["pesos"]["provisional"] is True and r["aviso"]["provisional"] is False
     assert sum(t["peso"] for t in r["pesos"]["terminos"]) == pytest.approx(1.0)
-    assert r["aviso"]["solo_semanas_evaluacion"] is True and len(r["aviso"]["senales"]) == 4
-    # Nada en inglés a la vista: los valores técnicos se traducen.
-    s1 = r["aviso"]["senales"][0]
-    assert s1["nombre"] == "Temporada de evaluación" and s1["umbral_texto"] == "una semana de evaluaciones"
-    assert "evaluation_week" not in s1["descripcion"] and "una semana de evaluaciones" in s1["descripcion"]
+    assert r["aviso"]["solo_semanas_evaluacion"] is True and len(r["aviso"]["senales"]) == 3
+    assert r["aviso"]["puntaje_minimo"] == 2 and r["aviso"]["total_senales"] == 3
+    assert r["aviso"]["regla"] == (
+        "En semana de evaluaciones (D7), el aviso aparece con al menos 2 de estas 3 señales: "
+        "caída de asistencia, baja de nota, carga de créditos alta."
+    )
+    # La semana de evaluaciones es la condición, no una señal visible
+    assert [s["nombre"] for s in r["aviso"]["senales"]] == ["Caída de asistencia", "Baja de nota", "Carga de créditos alta"]
+    assert not any("evaluación" in s["nombre"].lower() for s in r["aviso"]["senales"])
     textos = " ".join(f'{s["descripcion"]} {s["umbral_texto"]}' for s in r["aviso"]["senales"])
     assert not any(w in textos for w in ("medium", "high", "low", "grade_change"))
     assert r["afinidad"]["minimo_alternativa"] == estado_sembrado.parametros["umbral_afinidad"]

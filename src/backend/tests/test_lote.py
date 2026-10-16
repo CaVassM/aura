@@ -47,25 +47,45 @@ def eventos(client, tipo=None):
     return [e for e in todos if tipo is None or e["tipo"] == tipo]
 
 
-def test_el_umbral_acordado_es_75(estado_fresco, client_fresco):
+def test_el_umbral_es_75_y_sale_de_un_solo_valor_del_yaml(estado_fresco, client_fresco):
     assert estado_fresco.parametros["modo_lote_umbral_utilizacion"] == 0.75
     assert lotes(client_fresco)["umbral_pct"] == 75.0
+    # el nivel «alta» del panel es el mismo corte: no hay un segundo valor
+    assert "alta_mayor_que" not in estado_fresco.parametros["coordinacion"]["nivel_ocupacion"]
+    assert client_fresco.get("/api/demo/estado").json()["umbrales_nivel"]["alta_desde"] == 75.0
+    assert client_fresco.get("/api/coordinacion/reglas").json()["modo_lote"]["umbral_pct"] == 75.0
 
 
-def test_las_propuestas_directas_no_incluyen_servicios_en_lote(client_fresco, estado_fresco):
+def test_alta_y_en_lote_son_lo_mismo(estado_fresco, client_fresco):
+    panorama = lotes(client_fresco)
+    assert any(s["en_lote"] for s in panorama["servicios"])
+    assert all((s["pct"] >= 75) == s["en_lote"] for s in panorama["servicios"])
+    for s in client_fresco.get("/api/coordinacion/resumen").json()["servicios"]:
+        assert (s["nivel"] == "alta") == (s["ocupacion_pct"] >= 75)
+
+
+def test_un_servicio_en_lote_no_se_oculta_sale_como_una_sola_opcion_de_tipo_lote(client_fresco, estado_fresco):
     panorama = lotes(client_fresco)
     en_lote = {s["service_id"] for s in panorama["servicios"] if s["en_lote"]}
-    assert en_lote and all(s["pct"] >= 75 for s in panorama["servicios"] if s["en_lote"])
-    assert all(s["pct"] < 75 for s in panorama["servicios"] if not s["en_lote"])
-    opciones = client_fresco.post("/api/appointments/proposals?k=20", json=de("E1")).json()["opciones"]
-    assert opciones and not ({o["service_id"] for o in opciones} & en_lote)
+    assert en_lote
+    # peer_support (motivo social_support): hay servicios sobre y bajo el umbral
+    pedido = de("E1", motivo="social_support", canales_aceptables=["digital", "phone", "in_person"])
+    propuesta = client_fresco.post("/api/appointments/proposals?k=20", json=pedido).json()
+    opciones = propuesta["opciones"]
+    assert 1 <= len(opciones) <= 3  # máximo 3, aunque se pida más
+    for o in opciones:
+        assert (o["tipo_opcion"] == "lote") == (o["service_id"] in en_lote)  # cada servicio en lote: opción de lote
+        if o["tipo_opcion"] == "lote":
+            assert o["opcion_id"] == f"LOTE|{o['service_id']}" and o["fecha"] is None and o["cupos_libres"] > 0
+            assert o["tiempo_respuesta_s"] == 30 and "mucha demanda" in o["mensaje"]
+    assert len({o["service_id"] for o in opciones if o["tipo_opcion"] == "lote"}) == len([o for o in opciones if o["tipo_opcion"] == "lote"])
 
 
-def test_si_solo_hay_servicios_en_lote_no_hay_opciones_directas_y_se_ofrece_el_lote(client_fresco, todo_en_lote):
+def test_si_todo_esta_en_lote_hay_opciones_de_lote_no_un_vacio(client_fresco, todo_en_lote):
     r = client_fresco.post("/api/appointments/proposals", json=de("E1")).json()
-    assert r["opciones"] == [] and r["motivo_vacio"] == "servicios_en_lote"
-    lote = r["lote"]
-    assert lote["umbral_pct"] == 0.0 and lote["ventana_s"] == 60 and lote["abierto"] is False and lote["servicios"]
+    assert r["opciones"] and all(o["tipo_opcion"] == "lote" for o in r["opciones"]) and r["motivo_vacio"] is None
+    assert r["mensaje"] == "Este servicio tiene mucha demanda; sus cupos se reparten en grupo. Te confirmo en unos segundos."
+    assert r["opciones"][0]["tiempo_respuesta_s"] == 60  # la ventana del lote
 
 
 def test_entrar_al_lote_abre_la_cuenta_regresiva_y_se_ve_en_coordinacion(client_fresco, todo_en_lote):
@@ -88,10 +108,10 @@ def test_no_se_puede_estar_dos_veces_en_el_mismo_lote(client_fresco, todo_en_lot
     assert r.status_code == 409 and r.json()["error"] == "ya_en_lote"
 
 
-def test_el_lote_solo_vale_cuando_no_hay_opciones_directas(client_fresco):
-    # Con el umbral real hay opciones directas: no hace falta lote.
+def test_el_lote_solo_vale_si_hay_un_servicio_compatible_en_modo_lote(client_fresco, estado_fresco):
+    estado_fresco.parametros["modo_lote_umbral_utilizacion"] = 1e6  # ninguno en lote
     r = client_fresco.post("/api/appointments/lote", json=de("E1"))
-    assert r.status_code == 422
+    assert r.status_code == 422 and "modo lote" in r.json()["detalle"]
 
 
 def test_el_lote_se_cierra_solo_al_juntar_el_maximo_y_asigna_en_conjunto(client_fresco, todo_en_lote):
@@ -127,8 +147,15 @@ def test_el_lote_se_cierra_solo_por_tiempo(client_fresco, todo_en_lote):
     assert lotes(client_fresco)["historial"][0]["resultado"]["asignados"] == 1
 
 
-def test_quien_no_encuentra_cupo_en_el_lote_queda_como_desencuentro_y_se_le_avisa(client_fresco, todo_en_lote):
-    # Un solo cupo libre en toda la red: solo uno de los dos puede quedar.
+def test_entrar_a_un_lote_nunca_registra_desencuentro(client_fresco, estado_fresco, todo_en_lote):
+    antes = len(estado_fresco.desencuentros)
+    assert client_fresco.post("/api/appointments/lote", json=de("E1")).status_code == 201
+    assert len(estado_fresco.desencuentros) == antes
+    assert eventos(client_fresco, "desencuentro") == []
+
+
+def test_quien_no_recibe_cupo_y_ya_no_hay_ninguno_compatible_queda_como_desencuentro(client_fresco, todo_en_lote):
+    # Un solo cupo libre en toda la red: solo uno de los dos puede quedar, y al otro ya no le queda ninguna opción.
     agenda = todo_en_lote.motor._agenda
     libres = agenda.libres_ahora()  # la demo ya trae cientos de cupos reservados: hay que partir de uno realmente libre
     cupo = next(c for c in agenda.cupos if c.id in libres and c.fecha.weekday() == 2 and c.tipo == "counseling"
@@ -142,8 +169,36 @@ def test_quien_no_encuentra_cupo_en_el_lote_queda_como_desencuentro_y_se_le_avis
     assert r["asignados"] == 1 and r["sin_cupo"] == 1 and len(r["sin_cupo_estudiantes"]) == 1
     perdedor = r["sin_cupo_estudiantes"][0]
     avisos = client_fresco.get(f"/api/estudiantes/{perdedor}/avisos").json()["avisos"]
-    assert avisos[-1]["tipo"] == "lote_sin_cupo"
+    assert avisos[-1]["tipo"] == "lote_sin_cupo" and "lista de espera" in avisos[-1]["mensaje"]
     assert [e["origen"] for e in eventos(client_fresco, "desencuentro")] == ["lote"]
+
+
+def test_quien_no_recibe_cupo_pero_aun_hay_opciones_las_recibe_y_no_es_desencuentro(client_fresco, estado_fresco, todo_en_lote):
+    # Dos personas quieren consejería (solo ese servicio) y hay un único cupo de consejería: una se queda sin él.
+    # Como todavía existe un cupo compatible (de apoyo entre pares), NO es un desencuentro: se le ofrece.
+    agenda = todo_en_lote.motor._agenda
+    libres = agenda.libres_ahora()
+    consejeria = next(c for c in agenda.cupos if c.id in libres and c.fecha.weekday() == 2 and c.tipo == "counseling"
+                      and "digital" in c.canales and c.fecha > agenda.hoy)
+    pares = next(c for c in agenda.cupos if c.id in libres and c.fecha.weekday() == 2 and c.tipo == "peer_support"
+                 and "phone" in c.canales and c.fecha > agenda.hoy)
+    agenda.libres_base = {consejeria.id, pares.id}
+    antes = len(estado_fresco.desencuentros)
+    miercoles = [{"dia": "Wed", "desde": "09:00", "hasta": "18:00"}]
+    for est in ("E1", "E2"):
+        r = client_fresco.post(
+            "/api/appointments/lote",
+            json=de(est, franjas=miercoles, canales_aceptables=["digital", "phone"], solo_servicio_ideal=True),
+        )
+        assert r.status_code == 201, r.text
+    assert esperar(lambda: lotes(client_fresco)["historial"])
+    r = lotes(client_fresco)["historial"][0]["resultado"]
+    assert r["asignados"] == 1 and r["sin_cupo"] == 1
+    perdedor = r["sin_cupo_estudiantes"][0]
+    assert len(estado_fresco.desencuentros) == antes and eventos(client_fresco, "desencuentro") == []
+    aviso = client_fresco.get(f"/api/estudiantes/{perdedor}/avisos").json()["avisos"][-1]
+    assert aviso["tipo"] == "lote_sin_cupo" and "1)" in aviso["mensaje"] and aviso["opciones"]
+    assert aviso["opciones"][0]["tipo"] == "peer_support"
 
 
 def test_reiniciar_la_demo_descarta_el_lote_abierto(client_fresco, todo_en_lote):
@@ -201,21 +256,15 @@ def consejeria_en_lote(estado_fresco, monkeypatch):
 TODOS_LOS_CANALES = ["digital", "phone", "in_person"]
 
 
-def test_si_el_servicio_ideal_esta_en_lote_se_ofrece_el_lote_junto_a_las_alternativas(client_fresco, consejeria_en_lote):
+def test_el_servicio_ideal_en_lote_va_primero(client_fresco, consejeria_en_lote):
     pedido = de("E1", distrito="DIST_NEBULA", canales_aceptables=TODOS_LOS_CANALES)
-    r = client_fresco.post("/api/appointments/proposals?k=5", json=pedido).json()
-    assert r["opciones"] and all(o["es_alternativa"] for o in r["opciones"])  # lo directo es de otro servicio
-    assert r["lote_para_ideal"] is True and r["lote"]["servicios"]
-    # y se puede entrar al lote aunque haya opciones directas
-    entrada = client_fresco.post("/api/appointments/lote", json=pedido)
-    assert entrada.status_code == 201, entrada.text
+    opciones = client_fresco.post("/api/appointments/proposals?k=5", json=pedido).json()["opciones"]
+    assert len(opciones) == 3  # máximo 3
+    assert all(o["tipo_opcion"] == "lote" and not o["es_alternativa"] for o in opciones)  # hay 5 consejerías: alcanzan
 
 
 def test_quien_entra_al_lote_por_su_servicio_no_recibe_otro(client_fresco, estado_fresco, consejeria_en_lote):
-    solicitud = de("E1", distrito="DIST_NEBULA", canales_aceptables=TODOS_LOS_CANALES, solo_servicio_ideal=True)
-    # con «solo el servicio ideal» las opciones directas desaparecen: no hay alternativos
-    directas = client_fresco.post("/api/appointments/proposals?k=5", json=solicitud).json()
-    assert directas["opciones"] == [] and directas["motivo_vacio"] == "servicios_en_lote"
+    solicitud = de("E1", distrito="DIST_NEBULA", canales_aceptables=TODOS_LOS_CANALES)
     assert client_fresco.post("/api/appointments/lote", json=solicitud).status_code == 201
     client_fresco.post("/api/appointments/lote", json={**solicitud, "estudiante_id": "E2"})
     assert esperar(lambda: lotes(client_fresco)["historial"]), "el lote debía cerrarse solo"
@@ -223,6 +272,8 @@ def test_quien_entra_al_lote_por_su_servicio_no_recibe_otro(client_fresco, estad
     assert citas and all(c["tipo"] == "counseling" for c in citas)  # solo consejería, nunca un alternativo
 
 
-def test_sin_servicio_ideal_en_lote_no_se_ofrece_lote_junto_a_opciones(client_fresco):
-    r = client_fresco.post("/api/appointments/proposals?k=5", json=de("E1", distrito="DIST_NEBULA")).json()
-    assert r["opciones"] and not r["lote_para_ideal"] and r["lote"] is None
+def test_un_servicio_en_lote_ya_no_exige_que_no_haya_opciones_directas(client_fresco, consejeria_en_lote):
+    # Antes el lote solo se ofrecía sin opciones directas; ahora es una opción más, siempre visible.
+    pedido = de("E1", distrito="DIST_NEBULA", canales_aceptables=TODOS_LOS_CANALES, motivo="social_support")
+    opciones = client_fresco.post("/api/appointments/proposals?k=5", json=pedido).json()["opciones"]
+    assert opciones and not any(o["tipo_opcion"] == "lote" for o in opciones)  # pares no está en lote

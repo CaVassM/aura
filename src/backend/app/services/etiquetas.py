@@ -27,6 +27,14 @@ class Etiquetas:
     def canal(self, codigo: str) -> str:
         return self._de("canal", codigo)
 
+    def distrito(self, codigo: str) -> str:
+        return self._de("distrito", codigo)
+
+    def confirmacion_canal(self, canal: str, servicio_nombre: str, distrito: str) -> str:
+        """La línea de la confirmación de una cita según el canal (enlace por correo, llamada o lugar presencial)."""
+        plantilla = self._e["confirmacion_canal"].get(canal, "")
+        return plantilla.format(servicio=servicio_nombre, distrito=self.distrito(distrito))
+
     def grupo(self, codigo: str) -> str:
         return self._de("grupo", codigo)
 
@@ -97,6 +105,10 @@ class Etiquetas:
     @property
     def senales(self) -> dict:
         return self._e["senales"]
+
+    @property
+    def aviso_regla(self) -> str:
+        return self._e["aviso_regla"]
 
     @property
     def franja_principal(self) -> str:

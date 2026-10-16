@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class UmbralesNivel(BaseModel):
     baja_menor_que: float  # ocupación < este valor: baja
-    alta_mayor_que: float  # ocupación > este valor: alta (en medio: media)
+    alta_desde: float  # ocupación ≥ este valor (el umbral del modo lote): alta (en medio: media)
 
 
 class EstadoDemo(BaseModel):

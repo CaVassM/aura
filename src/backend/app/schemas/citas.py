@@ -1,6 +1,16 @@
 """Citas y catálogo (vista del estudiante)."""
 
+from functools import lru_cache
+
+from aura.herramientas.configuracion import cargar_yaml
 from pydantic import BaseModel, Field
+
+from ..services.etiquetas import Etiquetas
+
+
+@lru_cache(maxsize=1)
+def _etiquetas() -> Etiquetas:
+    return Etiquetas(cargar_yaml("tablas.yaml"))
 
 
 class FranjaIn(BaseModel):
@@ -22,6 +32,10 @@ class SolicitudIn(BaseModel):
     solo_servicio_ideal: bool = Field(
         default=False, description="La persona no acepta otro servicio que el ideal para su motivo (sin alternativos)"
     )
+    service_id_preferido: str | None = Field(
+        default=None,
+        description="Servicio que la persona pidió por nombre o id (p. ej. «Brújula»): sus opciones van primero",
+    )
 
 
 class ReservaIn(BaseModel):
@@ -31,45 +45,50 @@ class ReservaIn(BaseModel):
         default=None,
         description="Opcional: `servicio_ideal` de la propuesta; permite contar la demanda desviada",
     )
+    reemplazar: bool = Field(
+        default=False,
+        description="R7: si ya tiene una cita activa de ese tipo de servicio, la cancela al reservar esta (una sola operación)",
+    )
 
 
 class OpcionOut(BaseModel):
-    opcion_id: str
+    """Una opción de la propuesta: un cupo concreto, o un servicio en modo lote (sin día ni hora: los decide el lote)."""
+
+    opcion_id: str = Field(description="`<cupo_id>|<canal>` para un cupo; `LOTE|<service_id>` para un servicio en lote")
+    tipo_opcion: str = Field(default="cupo", description="`cupo` o `lote`")
     service_id: str
     servicio_nombre: str
     tipo: str
     tipo_label: str
     distrito: str
-    fecha: str
-    hora_inicio: str
-    hora_fin: str
-    canal: str
-    dias_espera: int
+    fecha: str | None = None
+    dia_semana: str | None = None
+    hora_inicio: str | None = None
+    hora_fin: str | None = None
+    canal: str | None = None
+    canal_label: str | None = None
+    dias_espera: int | None = None
     es_alternativa: bool
     afinidad: float
-
-
-class LoteOfertaOut(BaseModel):
-    """Cuando solo hay servicios en modo lote: cómo funciona el lote y cuánto falta para que cierre."""
-
-    umbral_pct: float
-    ventana_s: int
-    tamano_maximo: int
-    abierto: bool
-    pendientes: int
-    cierra_en: str | None = None
-    servicios: list[str] = []
+    cupos_libres: int | None = Field(default=None, description="Solo `lote`: cupos libres compatibles del servicio")
+    tiempo_respuesta_s: int | None = Field(default=None, description="Solo `lote`: segundos en que se resuelve el lote")
+    mensaje: str | None = Field(default=None, description="Solo `lote`: texto listo para mostrar")
 
 
 class PropuestaOut(BaseModel):
-    opciones: list[OpcionOut]
+    opciones: list[OpcionOut] = Field(description="Máximo 3; el servicio ideal (o el pedido por nombre) primero")
     servicio_ideal: str | None = None
     motivo_vacio: str | None = None
-    lote: LoteOfertaOut | None = None
-    lote_para_ideal: bool = Field(
-        default=False,
-        description="Hay opciones directas (de otro servicio) y además el servicio ideal tiene plazas en lote: se puede entrar a él",
+    mensaje: str | None = Field(
+        default=None,
+        description="Texto del backend para los casos especiales (sin cupos, servicio en lote, servicio pedido sin cupo)",
     )
+    preferido: dict | None = Field(
+        default=None,
+        description="Si se pidió un servicio por nombre: si se encontró, si tiene cupo y, si no, su fecha más cercana y la "
+        "mejor opción del mismo tipo en otro servicio",
+    )
+    sugerencia: str | None = None
 
 
 class ServicioOut(BaseModel):
@@ -102,6 +121,7 @@ class CitaOut(BaseModel):
     slot: SlotOut
     canal: str
     estado: str
+    aviso_canal: str = Field(default="", description="Línea de la confirmación según el canal (enlace, llamada o lugar)")
 
 
 def slot_desde_cupo(cupo: dict) -> SlotOut:
@@ -132,4 +152,5 @@ def cita_out(cita) -> CitaOut:
         ),
         canal=cita.canal,
         estado=cita.estado,
+        aviso_canal=_etiquetas().confirmacion_canal(cita.canal, cita.servicio_nombre, cita.distrito),
     )

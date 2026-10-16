@@ -78,10 +78,21 @@ def test_una_sola_solicitud_se_asigna_sin_genetico():
     assert plan["n"] == 1 and len(plan["asignaciones"]) == 1 and plan["mejora_sobre_llegada"] is False
 
 
-def test_las_propuestas_directas_pueden_apartar_servicios_en_lote():
+def test_las_propuestas_pueden_apartar_servicios_del_todo():
     api = ServicioAsignacion()
-    todo = api.proponer_opciones(solicitud("A", ["Wed"]), 20)["opciones"]
-    servicios = {o["service_id"] for o in todo}
-    assert len(servicios) > 1
-    sin_uno = api.proponer_opciones(solicitud("A", ["Wed"]), 20, excluir_servicios={todo[0]["service_id"]})["opciones"]
+    todo = api.proponer_opciones(solicitud("A", ["Wed"]), 3)["opciones"]
+    assert 1 <= len(todo) <= 3  # el motor nunca devuelve más de 3
+    sin_uno = api.proponer_opciones(solicitud("A", ["Wed"]), 3, excluir_servicios={todo[0]["service_id"]})["opciones"]
     assert sin_uno and todo[0]["service_id"] not in {o["service_id"] for o in sin_uno}
+
+
+def test_los_servicios_en_lote_salen_como_una_sola_opcion_cada_uno():
+    api = ServicioAsignacion()
+    base = api.proponer_opciones(solicitud("A", ["Wed"]), 3)["opciones"]
+    en_lote = {base[0]["service_id"]}
+    r = api.proponer_opciones(solicitud("A", ["Wed"]), 3, servicios_lote=en_lote, ventana_lote_s=45)
+    lote = [o for o in r["opciones"] if o["tipo_opcion"] == "lote"]
+    assert len(lote) == 1 and lote[0]["service_id"] == base[0]["service_id"]  # misma posición: se ordena con el mismo costo
+    assert r["opciones"][0] is lote[0] or r["opciones"][0]["tipo_opcion"] == "lote"
+    assert lote[0]["tiempo_respuesta_s"] == 45 and lote[0]["cupos_libres"] >= 1
+    assert not any(o["tipo_opcion"] == "cupo" and o["service_id"] in en_lote for o in r["opciones"])

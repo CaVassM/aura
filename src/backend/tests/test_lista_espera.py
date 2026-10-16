@@ -21,7 +21,7 @@ SOLICITUD = {
 }
 
 
-def test_anotarse_y_aviso_al_liberarse_un_cupo(client_fresco):
+def test_anotarse_y_aviso_al_liberarse_un_cupo(client_fresco, sin_modo_lote):
     c = client_fresco
     # Se agota todo lo que sirve en un miércoles concreto y la persona se anota
     ocupadas = []
@@ -56,16 +56,18 @@ def test_anotarse_y_aviso_al_liberarse_un_cupo(client_fresco):
     assert "lista_espera_alta" in tipos and "lista_espera_aviso" in tipos
 
 
-def test_un_mismo_cupo_no_se_avisa_a_dos_personas(client_fresco):
+def test_un_mismo_cupo_no_se_avisa_a_dos_personas(client_fresco, estado_fresco):
     """Al cancelar, el servicio sale del modo lote y se liberan varios cupos: cada persona recibe uno distinto."""
+    estado_fresco.parametros["modo_lote_umbral_utilizacion"] = 0.75  # el servicio de Nébula parte justo bajo el umbral
     c = client_fresco
     solicitud = {k: v for k, v in SOLICITUD.items() if k != "fecha"}
     ocupadas = []
     for i in range(80):
         r = c.post("/api/appointments/proposals?k=20", json={"estudiante_id": f"X{i}", **solicitud}).json()
-        if not r["opciones"]:
+        directas = [o for o in r["opciones"] if o["tipo_opcion"] == "cupo"]  # las de lote no se reservan cupo a cupo
+        if not directas:
             break
-        ocupadas.append(c.post("/api/appointments", json={"estudiante_id": f"X{i}", "opcion_id": r["opciones"][0]["opcion_id"]}).json())
+        ocupadas.append(c.post("/api/appointments", json={"estudiante_id": f"X{i}", "opcion_id": directas[0]["opcion_id"]}).json())
     for e in ("A", "B"):
         c.post("/api/appointments/lista-espera", json={"estudiante_id": e, **solicitud})
     c.delete(f"/api/appointments/{ocupadas[0]['id']}", params={"estudiante_id": ocupadas[0]["estudiante_id"]})

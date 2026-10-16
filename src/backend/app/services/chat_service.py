@@ -25,10 +25,11 @@ from .errors import (
     NotFoundError,
     PlatformError,
     SlotTakenError,
+    YaEnLoteError,
+    YaTieneCitaError,
 )
 from .etiquetas import Etiquetas
 from .lista_espera_service import ListaEsperaService
-from .lote_service import LoteService
 
 if TYPE_CHECKING:  # el agente importa LangChain: se carga solo al usar el chat (ver deps.get_agente)
     from agente.agente import AgenteAura
@@ -47,6 +48,7 @@ class PuertoPlataforma:
     def _cita(self, cita: Cita) -> dict:
         datos = asdict(cita)
         datos["canal_label"] = self._etiquetas.canal(cita.canal)
+        datos["aviso_canal"] = self._etiquetas.confirmacion_canal(cita.canal, cita.servicio_nombre, cita.distrito)
         datos["dia_semana"] = self._etiquetas.dia_largo(date.fromisoformat(cita.fecha).weekday())
         return datos
 
@@ -60,11 +62,26 @@ class PuertoPlataforma:
         except InvalidRequestError as error:
             return {"opciones": [], "motivo_vacio": "solicitud_invalida", "detalle": error.detalle}
 
-    def reservar(self, estudiante_id: str, opcion_id: str, servicio_ideal: str | None) -> dict:
+    def reservar(
+        self,
+        estudiante_id: str,
+        opcion_id: str,
+        servicio_ideal: str | None,
+        solicitud: dict | None = None,
+        sesion_id: str | None = None,
+        reemplazar: bool = False,
+    ) -> dict:
         try:
-            return {"ok": True, "cita": self._cita(self._citas.reservar(estudiante_id, opcion_id, servicio_ideal, origen="chat"))}
-        except (SlotTakenError, InvalidRequestError) as error:
+            resultado = self._citas.reservar_opcion(
+                estudiante_id, opcion_id, servicio_ideal, origen="chat", solicitud=solicitud, sesion_id=sesion_id, reemplazar=reemplazar
+            )
+        except YaTieneCitaError as error:
+            return {"ok": False, "error": error.code, "detalle": error.detalle, "cita": error.cita, "mensaje": error.mensaje}
+        except (SlotTakenError, InvalidRequestError, YaEnLoteError) as error:
             return self._error(error)
+        if resultado["estado"] == "pendiente":
+            return {"ok": True, **resultado}
+        return {"ok": True, "estado": "confirmada", "cita": self._cita(resultado["cita"])}
 
     def cancelar(self, cita_id: str, estudiante_id: str) -> dict:
         try:
@@ -74,12 +91,6 @@ class PuertoPlataforma:
 
     def listar_citas(self, estudiante_id: str) -> list[dict]:
         return [self._cita(c) for c in self._citas.listar(estudiante_id)]
-
-    def entrar_a_lote(self, solicitud: dict, estudiante_id: str, sesion_id: str) -> dict:
-        try:
-            return LoteService(self._estado).entrar(estudiante_id, solicitud, sesion_id, origen="chat")
-        except PlatformError as error:
-            return self._error(error)
 
     def anotar_lista_espera(self, solicitud: dict, estudiante_id: str, sesion_id: str) -> dict:
         try:
@@ -92,7 +103,8 @@ class PuertoPlataforma:
         return AcademicoService(self._estado).asistencia_para_agente(estudiante_id)
 
     def registrar_desencuentro(self, solicitud: dict) -> dict:
-        return self._citas.registrar_desencuentro(solicitud, origen="chat")
+        # Solo es un desencuentro si no existe ningún cupo compatible (ni normal ni en lote): se verifica antes de registrar
+        return self._citas.registrar_desencuentro(solicitud, origen="chat", verificar=True)
 
 
 class ChatService:
@@ -145,19 +157,22 @@ class ChatService:
 
     def _respuesta(self, session_id: str, resultado) -> dict:
         opciones, cita, cancelada, desencuentro = [], None, None, False
-        lote, lote_oferta, lista_espera = None, None, None
+        lote, lista_espera, mensaje, ya_tiene = None, None, None, None
         for evento in resultado.eventos:
+            if evento.nombre == "reservar_cita" and evento.resultado.get("error") == "ya_tiene_cita":
+                ya_tiene = {"cita": evento.resultado["cita"], "mensaje": evento.resultado["mensaje"]}
             if not evento.ok:
                 continue
             if evento.nombre == "proponer_opciones":
-                opciones = evento.resultado["opciones"]
-                lote_oferta = evento.resultado.get("lote")  # sin opciones, o junto a ellas si el servicio ideal está en lote
+                opciones, mensaje = evento.resultado["opciones"], evento.resultado.get("mensaje")
             elif evento.nombre == "reservar_cita":
-                cita, opciones = self._cita_out(evento.resultado["cita"]), []
+                opciones, ya_tiene = [], None
+                if evento.resultado.get("estado") == "pendiente":  # eligió un servicio en lote: queda esperando
+                    lote = evento.resultado["lote"]
+                else:
+                    cita = self._cita_out(evento.resultado["cita"])
             elif evento.nombre == "cancelar_cita":
                 cancelada = self._cita_out(evento.resultado["cita"])
-            elif evento.nombre == "entrar_a_lote":
-                lote, lote_oferta = evento.resultado["lote"], None
             elif evento.nombre == "registrar_desencuentro":
                 desencuentro = True
             elif evento.nombre == "avisarme_si_hay_cupo":
@@ -170,7 +185,8 @@ class ChatService:
             "cita_cancelada": cancelada,
             "desencuentro_registrado": desencuentro,
             "lote": lote,
-            "lote_oferta": lote_oferta,
+            "mensaje": mensaje,
+            "ya_tiene_cita": ya_tiene,
             "lista_espera": lista_espera,
             "alerta_crisis": resultado.crisis,
             "herramientas_usadas": [{"nombre": e.nombre, "ok": e.ok} for e in resultado.eventos],

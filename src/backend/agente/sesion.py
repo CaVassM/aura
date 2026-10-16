@@ -22,8 +22,8 @@ class SesionChat:
     servicio_ideal: str | None = None
     ultima_solicitud: dict | None = None  # para registrar el desencuentro sin que el modelo la repita
     desencuentro_registrado: bool = False
-    lote_disponible: bool = False  # la última búsqueda solo encontró servicios en modo lote
-    lote_solo_ideal: bool = False  # el lote se ofreció junto a opciones: quien entra quiere ese servicio, no otro
+    desencuentros_firmas: set = field(default_factory=set)  # (servicio ideal, franjas) ya registrados: un solo desencuentro por conversación
+    reemplazo_pendiente: dict | None = None  # R7: `{opcion_id}` que choca con una cita activa; espera que la persona confirme
     lote_id: int | None = None  # lote en el que quedó esperando
     actualizada_en: str = ""
 

@@ -1,6 +1,6 @@
 """El camino real de ChatOllama contra un servidor que imita la API HTTP de Ollama (/api/chat y /api/tags).
 
-No prueba a gemma4: prueba que nuestras herramientas y mensajes se serializan como Ollama los espera
+No prueba a un modelo concreto (usa el del .env): prueba que nuestras herramientas y mensajes se serializan como Ollama los espera
 y que el bucle herramienta → respuesta funciona de punta a punta.
 """
 
@@ -20,6 +20,7 @@ from agente.config import ConfigAgente
 from app.main import create_app
 
 PEDIDOS: list[dict] = []
+MODELO_DEL_ENTORNO = ConfigAgente.desde_entorno().modelo  # el modelo del .env; el servidor falso lo anuncia como instalado
 
 
 class FalsoOllama(BaseHTTPRequestHandler):
@@ -35,7 +36,7 @@ class FalsoOllama(BaseHTTPRequestHandler):
         self.wfile.write(cuerpo)
 
     def do_GET(self):
-        self._enviar({"models": [{"name": "gemma4:latest"}]})
+        self._enviar({"models": [{"name": f"{MODELO_DEL_ENTORNO.split(':')[0]}:latest"}, {"name": MODELO_DEL_ENTORNO}]})
 
     def do_POST(self):
         pedido = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -90,10 +91,10 @@ def test_chat_de_punta_a_punta_con_chatollama(settings, estado_fresco, ollama_fa
     assert estado["ollama_disponible"] and estado["modelo_instalado"]
 
     primero = PEDIDOS[0]
-    assert primero["model"] == "gemma4" and primero["options"]["num_ctx"] == config.num_ctx
+    assert primero["model"] == config.modelo and primero["options"]["num_ctx"] == config.num_ctx
     assert primero["think"] is False and primero["keep_alive"] == "45m"
     assert {t["function"]["name"] for t in primero["tools"]} == {
-        "proponer_opciones", "reservar_cita", "cancelar_cita", "listar_mis_citas", "registrar_desencuentro", "entrar_a_lote", "consultar_asistencia", "avisarme_si_hay_cupo",
+        "proponer_opciones", "reservar_cita", "cancelar_cita", "listar_mis_citas", "registrar_desencuentro", "consultar_asistencia", "avisarme_si_hay_cupo",
     }
     assert primero["messages"][0]["role"] == "system" and "AURA" in primero["messages"][0]["content"]
     assert primero["messages"][-1] == {"role": "user", "content": "Tengo parciales y estoy agobiada, puedo el miércoles por videollamada"}

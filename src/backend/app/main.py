@@ -40,7 +40,7 @@ def create_app(
     async def _error_de_plataforma(_: Request, error: PlatformError) -> JSONResponse:
         return JSONResponse(
             status_code=error.status_code,
-            content={"error": error.code, "detalle": error.detalle},
+            content={"error": error.code, "detalle": error.detalle, **error.extra},
         )
 
     for router in (salud, demo, coordinacion, actividad, academico, aviso_proactivo, lista_espera, lotes, avisos, desencuentros, reglas, catalogo, citas, chat):

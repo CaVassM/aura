@@ -8,9 +8,14 @@ fraccion_liberada: 0.50 # PROVISIONAL: política de liberación para el prototip
 ocupacion_inicial: 0.10
 beta: 5.0
 umbral_afinidad: 0.50 # PROVISIONAL: mínimo para aceptar un servicio alternativo
+# Cuántas opciones como máximo muestra `proponer_opciones` a la persona (el servicio ideal o el pedido por nombre
+# primero; las alternativas afines solo completan).
+max_opciones: 3
+# R7, equidad: citas activas (confirmadas y por venir) que puede tener una persona por tipo de servicio.
+max_citas_activas_por_tipo: 1
 # Modo lote (docs/como_funciona.md §8). Un servicio entra en modo lote cuando su utilización (cupos reservados /
 # cupos liberados de la agenda abierta) llega a este valor: sus cupos ya no se ofrecen uno a uno, solo se reparten
-# por lote. Valor acordado con el equipo (antes 0.70, provisional).
+# por lote. Es el ÚNICO valor del umbral: la ocupación «alta» del panel (coordinacion.nivel_ocupacion) sale de aquí.
 modo_lote_umbral_utilizacion: 0.75
 lote:
   ventana_segundos: 30 # el lote se cierra solo a los N segundos de entrar la primera solicitud…
@@ -39,12 +44,13 @@ probabilidad_canal:
   digital: 0.725
   phone: 0.707
   in_person: 0.667
+# Aviso académico: SOLO en semana de evaluaciones (D7, `evento_evaluacion`: es la condición, no una señal) y con al menos
+# `puntaje_minimo` de estas 3 señales: caída de asistencia, baja de nota y carga de créditos alta.
 aviso:
-  dropout_alert: [medium, high]
   caida_asistencia: 0.05
   cambio_nota: -0.5
   percentil_carga_creditos: 0.75
-  puntaje_minimo: 3
+  puntaje_minimo: 2
   evento_evaluacion: evaluation_week
 
 # Demo de la API (vista de Coordinación). Todo es simulación, no dato observado.
@@ -76,6 +82,6 @@ demo:
 #  - Ventana de cada pedido: de su fecha de solicitud + 1 a su fecha + horizonte_semanas × 7 días.
 coordinacion:
   nivel_ocupacion: # ocupación = cupos ocupados / cupos liberados (%)
-    baja_menor_que: 50 # baja: < 50
-    alta_mayor_que: 70 # media: 50–70, alta: > 70
+    baja_menor_que: 50 # baja: < 50; media: de 50 al umbral de lote; alta: desde el umbral de lote
+    # (modo_lote_umbral_utilizacion, 75 %): «alta» y «en modo lote» son lo mismo.
   desencuentros_recientes: 5 # cuántos se muestran en el detalle de un servicio

@@ -7,9 +7,10 @@ class PlatformError(Exception):
     status_code = 400
     code = "error"
 
-    def __init__(self, detalle: str = ""):
+    def __init__(self, detalle: str = "", extra: dict | None = None):
         super().__init__(detalle or self.code)
         self.detalle = detalle
+        self.extra = extra or {}  # campos adicionales de la respuesta HTTP (p. ej. los datos de la cita en conflicto)
 
 
 class NotFoundError(PlatformError):
@@ -35,3 +36,15 @@ class AgenteNoDisponibleError(PlatformError):
 class YaEnLoteError(PlatformError):
     status_code = 409
     code = "ya_en_lote"
+
+
+class YaTieneCitaError(PlatformError):
+    """R7 (equidad): ya tiene una cita activa de ese tipo de servicio. Trae los datos de esa cita y un mensaje listo."""
+
+    status_code = 409
+    code = "ya_tiene_cita"
+
+    def __init__(self, cita: dict, mensaje: str):
+        super().__init__(mensaje, {"cita": cita, "mensaje": mensaje})
+        self.cita = cita
+        self.mensaje = mensaje

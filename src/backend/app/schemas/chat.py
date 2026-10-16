@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 
-from .citas import CitaOut, LoteOfertaOut, OpcionOut
+from .citas import CitaOut, OpcionOut
 from .lotes import LoteEstadoOut
 
 
@@ -33,10 +33,15 @@ class ChatOut(BaseModel):
     cita_cancelada: CitaOut | None = Field(default=None, description="Cita cancelada en este mensaje")
     desencuentro_registrado: bool = False
     lote: LoteEstadoOut | None = Field(
-        default=None, description="La persona quedó esperando en un lote: cuenta regresiva hasta que se cierre solo"
+        default=None,
+        description="Eligió una opción de tipo lote: su solicitud quedó pendiente, con la cuenta regresiva hasta que el lote se cierre solo",
     )
-    lote_oferta: LoteOfertaOut | None = Field(
-        default=None, description="Todo lo compatible está en servicios en modo lote: el agente ofrece entrar al lote"
+    mensaje: str | None = Field(
+        default=None, description="Texto del backend de la última búsqueda para los casos especiales (sin cupos, lote, servicio pedido sin cupo)"
+    )
+    ya_tiene_cita: dict | None = Field(
+        default=None,
+        description="R7: ya tiene una cita activa de ese tipo de servicio; `{cita, mensaje}`. Si confirma, se cambia por la nueva",
     )
     lista_espera: dict | None = Field(
         default=None, description="La persona quedó en la lista de espera: se le avisará aquí si se libera un cupo (`{id, ...}`)"

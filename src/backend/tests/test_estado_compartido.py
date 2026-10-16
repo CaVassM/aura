@@ -2,7 +2,11 @@
 
 from datetime import date
 
+import pytest
+
 from app.services.citas_service import CitasService
+
+pytestmark = pytest.mark.usefixtures("sin_modo_lote")
 
 SOLICITUD = {
     "estudiante_id": "STU_TEST_1",

@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from agente.agente import AgenteAura
+from agente.config import ConfigAgente
 from app.main import create_app
 
 # La demo sembrada (escenario de estrés) casi no tiene cupos digitales lunes y martes; miércoles sí.
@@ -64,7 +65,7 @@ def ultimo_resultado(mensajes) -> dict | None:
 
 
 @pytest.fixture()
-def montar(settings, estado_fresco):
+def montar(settings, estado_fresco, sin_modo_lote):
     def _montar(guion):
         modelo = ModeloGuionado(guion=guion)
         cliente = TestClient(create_app(settings, estado_fresco, agente=AgenteAura(modelo=modelo)))
@@ -267,7 +268,7 @@ def test_estado_del_agente_responde_sin_ollama(montar, monkeypatch):
     cliente, _ = montar(proponer_y_responder)
     r = cliente.get("/api/chat/estado")
     assert r.status_code == 200
-    assert r.json()["ollama_disponible"] is False and r.json()["modelo"] == "gemma4"
+    assert r.json()["ollama_disponible"] is False and r.json()["modelo"] == ConfigAgente.desde_entorno().modelo  # el del .env de quien prueba
 
 
 def test_no_busca_si_la_persona_no_dijo_dias_ni_canal(montar, estado_fresco):
@@ -429,39 +430,39 @@ def test_lo_que_hace_el_chat_aparece_en_la_actividad_en_vivo(montar, estado_fres
     assert e["tipo"] == "cita_reservada" and e["origen"] == "chat" and e["estudiante_id"] == "E_VIVO"
 
 
-def test_lote_el_agente_ofrece_el_lote_y_solo_entra_si_la_persona_acepta(montar, estado_fresco):
+def test_lote_es_una_opcion_mas_y_elegirla_deja_la_solicitud_pendiente_sin_desencuentro(montar, estado_fresco):
     estado_fresco.parametros["modo_lote_umbral_utilizacion"] = 0.0  # todo está en modo lote
     estado_fresco.parametros["lote"].update({"ventana_segundos": 60, "tamano_maximo": 5})
+    antes = len(estado_fresco.desencuentros)
 
     def guion(mensajes):
         r = ultimo_resultado(mensajes)
-        if r is not None:
-            if r.get("motivo_vacio") == "servicios_en_lote":
-                return AIMessage("Todo está en servicios muy ocupados: se reparte por lote. ¿Quieres entrar al lote?")
-            if r.get("ok") and "lote" in r:
-                return AIMessage("Listo, quedaste en el lote.")
-            return AIMessage(r.get("error", "ok"))
         humanos = [m.content for m in mensajes if m.type == "human"]
-        if len(humanos) == 1:
-            return llamada("proponer_opciones", **PARAMS_PROPONER)
-        return llamada("entrar_a_lote")
+        if r is not None:
+            return AIMessage(r.get("mensaje") or "listo")
+        return llamada("proponer_opciones", **PARAMS_PROPONER) if len(humanos) == 1 else llamada("reservar_cita", numero=1)
 
     cliente, _ = montar(guion)
     primero = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E_LOTE"}).json()
-    assert primero["opciones"] == [] and primero["lote"] is None
-    assert primero["lote_oferta"]["servicios"] and primero["lote_oferta"]["ventana_s"] == 60
-    sid = primero["session_id"]
+    # No hay opciones ocultas: cada servicio en lote sale como UNA opción de tipo lote, con su mensaje listo
+    assert primero["opciones"] and all(o["tipo_opcion"] == "lote" for o in primero["opciones"])
+    assert len(primero["opciones"]) <= 3 and len({o["service_id"] for o in primero["opciones"]}) == len(primero["opciones"])
+    lote = primero["opciones"][0]
+    assert lote["opcion_id"].startswith("LOTE|") and lote["cupos_libres"] > 0 and lote["tiempo_respuesta_s"] == 60
+    assert lote["mensaje"] == "Este servicio tiene mucha demanda; sus cupos se reparten en grupo. Te confirmo en unos segundos."
+    assert primero["mensaje"] == lote["mensaje"] and primero["lote"] is None
+    assert cliente.get("/api/coordinacion/lotes").json()["abierto"] is None  # ver las opciones no entra a ningún lote
 
-    # «mmm déjame pensarlo» no es aceptar: la herramienta se niega y no entra al lote
-    duda = cliente.post("/api/chat", json={"mensaje": "mmm déjame pensarlo", "estudiante_id": "E_LOTE", "session_id": sid}).json()
-    assert duda["respuesta"] == "falta_confirmacion" and duda["lote"] is None
-    assert cliente.get("/api/coordinacion/lotes").json()["abierto"] is None
-
-    acepta = cliente.post("/api/chat", json={"mensaje": "sí, quiero entrar al lote", "estudiante_id": "E_LOTE", "session_id": sid}).json()
-    assert acepta["lote"]["estado"] == "en_espera" and acepta["lote"]["posicion"] == 1 and acepta["lote"]["cierra_en"]
-    [abierto] = [cliente.get("/api/coordinacion/lotes").json()["abierto"]]
+    # Elegirla = inscribirse: queda pendiente en el lote, sin cita y sin desencuentro
+    elegida = cliente.post(
+        "/api/chat", json={"mensaje": "la primera", "estudiante_id": "E_LOTE", "session_id": primero["session_id"]}
+    ).json()
+    assert elegida["cita"] is None and elegida["opciones"] == []
+    assert elegida["lote"]["estado"] == "en_espera" and elegida["lote"]["posicion"] == 1 and elegida["lote"]["cierra_en"]
+    assert [h["nombre"] for h in elegida["herramientas_usadas"]] == ["reservar_cita"]
+    abierto = cliente.get("/api/coordinacion/lotes").json()["abierto"]
     assert [s["estudiante_id"] for s in abierto["solicitudes"]] == ["E_LOTE"]
-    assert [h["nombre"] for h in acepta["herramientas_usadas"]] == ["entrar_a_lote"]
+    assert len(estado_fresco.desencuentros) == antes  # entrar a un lote NUNCA registra desencuentro
 
 
 def test_lote_al_resolverse_la_conversacion_recibe_el_aviso(montar, estado_fresco):
@@ -475,17 +476,19 @@ def test_lote_al_resolverse_la_conversacion_recibe_el_aviso(montar, estado_fresc
         if r is not None:
             return AIMessage("ok")
         humanos = [m.content for m in mensajes if m.type == "human"]
-        return llamada("proponer_opciones", **PARAMS_PROPONER) if len(humanos) == 1 else llamada("entrar_a_lote")
+        return llamada("proponer_opciones", **PARAMS_PROPONER) if len(humanos) == 1 else llamada("reservar_cita", numero=1)
 
     cliente, _ = montar(guion)
     sid = cliente.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E_AVISO"}).json()["session_id"]
-    cliente.post("/api/chat", json={"mensaje": "quiero entrar al lote", "estudiante_id": "E_AVISO", "session_id": sid})
+    cliente.post("/api/chat", json={"mensaje": "la primera", "estudiante_id": "E_AVISO", "session_id": sid})
     limite = time.monotonic() + 8
     while time.monotonic() < limite and not citas_de(estado_fresco, "E_AVISO"):
         time.sleep(0.1)
     assert citas_de(estado_fresco, "E_AVISO"), "el lote debía cerrarse solo y reservar la cita"
     historial = cliente.get(f"/api/chat/{sid}", params={"estudiante_id": "E_AVISO"}).json()["mensajes"]
-    assert historial[-1]["rol"] == "agent" and "Tu lote se resolvió" in historial[-1]["texto"] and "CITA-" in historial[-1]["texto"]
+    ultimo = historial[-1]["texto"]
+    assert historial[-1]["rol"] == "agent" and "Tu lote se resolvió" in ultimo and "CITA-" in ultimo
+    assert "enlace a tu correo institucional" in ultimo  # la línea del canal también llega con la cita del lote
     assert estado_fresco.chats.obtener(sid).lote_id is None
 
 
@@ -567,7 +570,7 @@ def test_busqueda_repetida_en_un_mensaje_se_frena(montar):
     assert r["respuesta"] == "Aquí tienes lo que encontré." and r["opciones"]
 
 
-def test_si_el_modelo_se_enreda_se_responde_con_lo_que_ya_se_busco(settings, estado_fresco):
+def test_si_el_modelo_se_enreda_se_responde_con_lo_que_ya_se_busco(settings, estado_fresco, sin_modo_lote):
     """Al agotar los pasos del turno, si ya había opciones no se pide «cuéntamelo de nuevo»."""
     from agente.config import ConfigAgente
 
@@ -582,32 +585,28 @@ def test_si_el_modelo_se_enreda_se_responde_con_lo_que_ya_se_busco(settings, est
     assert r["respuesta"].startswith("Estas son las opciones") and r["opciones"]
 
 
-def test_servicio_ideal_en_lote_junto_a_alternativas_se_puede_elegir_el_lote(settings, estado_fresco, monkeypatch):
-    """La persona quiere consejería (en lote) y hay pares directo: el agente muestra ambas cosas; si elige el lote, entra solo a consejería."""
+def test_servicio_pedido_por_nombre_en_lote_se_elige_como_opcion_y_entra_solo_a_ese_tipo(settings, estado_fresco, monkeypatch):
+    """La persona pide «Brújula Orientación» (consejería) y ese servicio está en lote: se ofrece como opción por lote."""
     from app.services.lote_service import LoteService
 
-    ids = {s["service_id"] for s in estado_fresco.motor.servicios() if s["tipo"] == "counseling"}
-    monkeypatch.setattr(LoteService, "servicios_en_lote", lambda self: ids)
+    monkeypatch.setattr(LoteService, "servicios_en_lote", lambda self: {"SRV_AE_001"})
     estado_fresco.parametros["lote"].update({"ventana_segundos": 60, "tamano_maximo": 5})
-    params = {**PARAMS_PROPONER, "distrito": "DIST_NEBULA", "canales_aceptables": ["digital", "phone", "in_person"]}
+    params = {**PARAMS_PROPONER, "canales_aceptables": ["digital"], "service_id_preferido": "Brújula Orientación"}
 
     def guion(mensajes):
         r = ultimo_resultado(mensajes)
         humanos = [m for m in mensajes if m.type == "human"]
         if r is None:
-            return llamada("proponer_opciones", **params) if len(humanos) == 1 else llamada("entrar_a_lote")
-        if "opciones" in r:
-            assert r["opciones"] and r["lote"]["servicios"] and "LOTE" in r["indicacion"]
-            return AIMessage("Hay pares ahora, o puedes entrar al lote de consejería.")
-        return AIMessage("Listo, quedaste en el lote." if r.get("ok") else r.get("error", "error"))
+            return llamada("proponer_opciones", **params) if len(humanos) == 1 else llamada("reservar_cita", numero=1)
+        return AIMessage("listo")
 
     modelo = ModeloGuionado(guion=guion)
     with TestClient(create_app(settings, estado_fresco, agente=AgenteAura(modelo=modelo))) as c:
         primero = c.post("/api/chat", json={"mensaje": MSG, "estudiante_id": "E_LOTE2"}).json()
-        assert primero["opciones"] and primero["lote_oferta"]["servicios"]  # las dos cosas a la vez
-        acepta = c.post("/api/chat", json={"mensaje": "Quiero consejería, entro al lote", "estudiante_id": "E_LOTE2", "session_id": primero["session_id"]}).json()
+        assert primero["opciones"][0]["tipo_opcion"] == "lote" and primero["opciones"][0]["service_id"] == "SRV_AE_001"
+        acepta = c.post("/api/chat", json={"mensaje": "la primera", "estudiante_id": "E_LOTE2", "session_id": primero["session_id"]}).json()
         assert acepta["lote"]["estado"] == "en_espera"
         abierto = c.get("/api/coordinacion/lotes").json()["abierto"]
         assert [s["estudiante_id"] for s in abierto["solicitudes"]] == ["E_LOTE2"]
-        # quien entra así quiere ese servicio y no otro: el motor no le asignará un alternativo
+        # quien entra al servicio ideal quiere ese tipo de servicio y no otro: el motor no le asignará un alternativo
         assert estado_fresco.lotes.abierto.solicitudes[0].solicitud["solo_servicio_ideal"] is True

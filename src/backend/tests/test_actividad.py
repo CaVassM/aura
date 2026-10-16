@@ -4,7 +4,11 @@ import asyncio
 import json
 
 from app.api.actividad import flujo_actividad
+import pytest
+
 from app.services.citas_service import CitasService
+
+pytestmark = pytest.mark.usefixtures("sin_modo_lote")
 
 SOLICITUD = {
     "estudiante_id": "STU_VIVO_1",

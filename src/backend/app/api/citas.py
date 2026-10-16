@@ -23,15 +23,17 @@ def proponer(
 
 @router.post("/lote", response_model=LoteEntradaOut, status_code=201)
 def entrar_a_lote(cuerpo: SolicitudIn, servicio: LoteService = Depends(get_lotes)):
-    """Pone la solicitud en el lote abierto (lo abre si no hay). Solo vale cuando `proposals` devolvió
-    `motivo_vacio: "servicios_en_lote"`: los servicios compatibles están en modo lote y se asignan en conjunto."""
+    """Pone la solicitud en el lote abierto (lo abre si no hay). Vale cuando `proposals` ofreció una opción de tipo
+    `lote` (un servicio en modo lote, que se asigna en conjunto). Entrar nunca registra un desencuentro."""
     datos = cuerpo.model_dump(exclude_none=True)
     return servicio.entrar(datos["estudiante_id"], datos, origen="api")
 
 
 @router.post("", response_model=CitaOut, status_code=201)
 def reservar(cuerpo: ReservaIn, servicio: CitasService = Depends(get_citas)):
-    return cita_out(servicio.reservar(cuerpo.estudiante_id, cuerpo.opcion_id, cuerpo.servicio_ideal))
+    return cita_out(
+        servicio.reservar(cuerpo.estudiante_id, cuerpo.opcion_id, cuerpo.servicio_ideal, reemplazar=cuerpo.reemplazar)
+    )
 
 
 @router.get("", response_model=list[CitaOut])

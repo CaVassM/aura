@@ -70,21 +70,21 @@ def test_cancelar_exige_pedido_o_confirmacion(mensaje, ultima, esperado):
 @pytest.mark.parametrize(
     "mensaje, ultima, esperado",
     [
-        ("sí, quiero entrar al lote", "", True),
-        ("Anótame en el lote", "", True),
-        ("acepto entrar al lote", "", True),
-        ("sí", "Se reparte por lote. ¿Quieres entrar al lote?", True),
-        ("dale", "¿Quieres que te ponga en el lote?", True),
+        ("sí, cámbiala", "", True),
+        ("Reprográmala por esta", "", True),
+        ("sí", "Ya tienes una cita de consejería el jueves 26 a las 14:00. ¿Quieres cambiarla por esta?", True),
+        ("dale", "¿Quieres cambiarla por esta?", True),
         ("sí", "¿Cuál de estas opciones prefieres?", False),
-        ("no quiero entrar al lote", "", False),
-        ("no, gracias", "¿Quieres entrar al lote?", False),
-        ("mmm déjame pensarlo", "¿Quieres entrar al lote?", False),
+        ("no, déjala como está", "¿Quieres cambiarla por esta?", False),
+        ("no la cambies", "", False),
+        ("mmm déjame pensarlo", "¿Quieres cambiarla por esta?", False),
+        ("puedo pasado mañana", "¿Quieres cambiarla por esta?", False),
     ],
 )
-def test_entrar_al_lote_exige_aceptacion_clara(mensaje, ultima, esperado):
-    from agente.entrada import acepta_lote
+def test_reemplazar_una_cita_exige_confirmacion_clara(mensaje, ultima, esperado):
+    from agente.entrada import acepta_reemplazo
 
-    assert acepta_lote(mensaje, ultima) is esperado
+    assert acepta_reemplazo(mensaje, ultima) is esperado
 
 
 @pytest.mark.parametrize("texto", [
