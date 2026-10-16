@@ -9,6 +9,9 @@ from .lote_service import LoteService
 from .errors import InvalidRequestError, NotFoundError, SlotTakenError
 
 
+TOPE_CITAS_ACTIVAS = 2
+
+
 class CitasService:
     """Lógica de citas; el motor decide disponibilidad y asignación."""
 
@@ -60,6 +63,9 @@ class CitasService:
 
         `origen` (`api` o `chat`) solo sirve para el registro de actividad en vivo."""
         with self._estado.lock:
+            activas = [c for c in self._estado.citas.list_by_student(estudiante_id) if c.estado == "confirmada"]
+            if len(activas) >= TOPE_CITAS_ACTIVAS:
+                raise InvalidRequestError(f"Has alcanzado el límite de {TOPE_CITAS_ACTIVAS} citas activas. Cancela una antes de agendar otra.")
             resultado = self._estado.motor.reservar(estudiante_id, opcion_id, servicio_ideal)
             if resultado.get("error") == "cupo_fuera_de_ventana":
                 raise InvalidRequestError("El cupo está fuera de la ventana de reserva (hoy + 1 a hoy + 14 días)")

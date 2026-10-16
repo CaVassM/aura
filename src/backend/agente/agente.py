@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from .config import ConfigAgente
 from .crisis import detectar_crisis, mensaje_crisis
+from .entrada import detectar_inyeccion
 from .errores import AgenteNoDisponible
 from .herramientas import ContextoTurno, EventoHerramienta, construir_herramientas
 from .prompt import construir_prompt
@@ -102,6 +103,16 @@ class AgenteAura:
             sesion.mensajes += [HumanMessage(mensaje), AIMessage(texto)]
             sesion.tocar()
             return ResultadoTurno(texto, crisis=True)
+
+        if detectar_inyeccion(mensaje):
+            texto = (
+                "Soy AURA, la asistente de citas de bienestar estudiantil. No puedo cambiar de rol, "
+                "ignorar mis directivas de seguridad ni realizar tareas fuera de mi función. "
+                "¿En qué puedo ayudarte respecto a tus citas de apoyo?"
+            )
+            sesion.mensajes += [HumanMessage(mensaje), AIMessage(texto)]
+            sesion.tocar()
+            return ResultadoTurno(texto)
 
         ctx = ContextoTurno(sesion, puerto, mensaje)
         agente = create_agent(

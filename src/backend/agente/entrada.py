@@ -118,3 +118,17 @@ def acepta_aviso(mensaje: str, ultima_respuesta: str) -> bool:
         return True
     previa = _plano(ultima_respuesta)
     return "avis" in previa and ("cupo" in previa or "liber" in previa) and bool(_AFIRMA.search(plano))
+
+
+_INYECCION = re.compile(_colapsar(
+    r"\b(ignore|ignora|olvida|desactiva|bypass)\b.*\b(instructions?|instrucciones?|reglas?|prompt|restricciones?|limits?|directivas?)\b"
+    r"|\b(modo desarrollador|developer mode|dan mode|jailbreak|system override)\b"
+    r"|\b(revela|muestra|imprime|dime|copia)\b.*\b(tu prompt|tus instrucciones|system prompt|tu configuracion|tus reglas)\b"
+    r"|\b(hazte pasar por|actua como un|simula ser)\b"
+))
+
+
+def detectar_inyeccion(mensaje: str) -> bool:
+    """Detecta intentos directos de prompt injection o jailbreak en el mensaje."""
+    return bool(_INYECCION.search(_plano(mensaje)))
+
