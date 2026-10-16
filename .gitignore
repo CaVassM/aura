@@ -48,3 +48,4 @@ scratchpad/
 *.tsbuildinfo
 src/backend/salidas/*.csv
 src/backend/salidas/*.json
+src/backend/data_pack/
