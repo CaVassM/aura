@@ -3,7 +3,7 @@
 from datetime import date
 
 from ..motor.datos import Solicitud
-from ..motor.costo import mejores_opciones
+from ..motor.costo import costo_individual, mejores_opciones
 from . import validacion
 from .estado_agenda import AgendaViva
 
@@ -52,7 +52,8 @@ class HerramientasAgente:
 
         Orden: primero las del servicio que la persona pidió por nombre (`service_id_preferido` en la solicitud, un id o
         un nombre) o, si no pidió ninguno, las del tipo de servicio ideal; después las del tipo ideal; las alternativas
-        afines solo completan si faltan. Dentro de cada grupo manda el costo.
+        afines solo completan si faltan. Dentro de cada grupo manda el costo; a igual costo, primero un cupo por servicio
+        y los del distrito de la persona.
 
         `servicios_lote` son los servicios en modo lote: no se ofrecen cupo a cupo, sino como UNA opción de tipo `lote`
         por servicio (se ordena con el costo de su mejor cupo, como cualquier otra). `excluir_servicios` los aparta del
@@ -98,9 +99,8 @@ class HerramientasAgente:
         con_cupo = {cupo.service_id for _, cupo, _ in entradas}
         pedidos = [sid for sid in preferidos if sid in con_cupo]  # los que nombró la persona y sí tienen cupo
 
-        def nivel(entrada) -> int:
+        def nivel(cupo) -> int:
             """0: lo que la persona pidió (servicio por nombre, o el tipo ideal); 1: el tipo ideal; 2: alternativas."""
-            cupo = entrada[1]
             if pedidos:
                 if cupo.service_id in pedidos:
                     return 0
@@ -108,7 +108,19 @@ class HerramientasAgente:
                 return 0
             return 1 if cupo.tipo == tipo_ideal else 2
 
-        elegidas = sorted(entradas, key=nivel)[:k]  # sorted es estable: dentro de cada nivel manda el costo
+        # Dentro de cada nivel manda el costo. Los costos empatan a menudo (misma fecha y canal): entonces va primero un
+        # cupo por servicio (sin esto, el servicio con el id más bajo llenaba las 3 opciones con sus horas) y, a igual
+        # ronda, los servicios del distrito de la persona.
+        beta = float(agenda.parametros["beta"])
+        rondas: dict[str, int] = {}
+        claves = []
+        for op, cupo, _ in entradas:
+            ronda = rondas.get(cupo.service_id, 0)
+            rondas[cupo.service_id] = ronda + 1
+            costo = round(costo_individual(op, agenda.cupo_por_id, agenda.hoy, beta), 6)
+            claves.append((nivel(cupo), costo, ronda, cupo.distrito != modelo.distrito))
+        orden = sorted(range(len(entradas)), key=claves.__getitem__)  # estable: el resto del empate, como antes
+        elegidas = [entradas[i] for i in orden[:k]]
         opciones = [
             self._formatear_lote(op, cupo, cupos_lote[cupo.service_id], tipo_ideal, ventana_lote_s)
             if es_lote

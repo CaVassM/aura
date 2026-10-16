@@ -175,3 +175,20 @@ def test_proponer_con_fecha_solo_trae_ese_dia(estado_fresco):
     assert con and {o["fecha"] for o in con} == {"2026-11-25"}
     mala = estado_fresco.motor.proponer_opciones({**base, "fecha": "25/11"}, 5)
     assert mala["motivo_vacio"] == "solicitud_invalida"
+
+
+def test_a_igual_costo_varia_servicios_y_prefiere_su_distrito(estado_fresco):
+    """Los cupos del mismo día y canal empatan en costo: no los llena un solo servicio y el del distrito de la persona va
+    primero, aunque esté en modo lote (antes Brújula, el id más bajo, ocupaba las 3 opciones y Trama no salía)."""
+    from app.services.citas_service import CitasService
+
+    solicitud = {
+        "estudiante_id": "E_VECTOR",
+        "motivo": "academic_pressure",
+        "distrito": "DIST_VECTOR",
+        "franjas": [{"dia": "Wed", "desde": "09:00", "hasta": "21:00"}],
+        "canales_aceptables": ["digital", "phone", "in_person"],
+    }
+    opciones = CitasService(estado_fresco).proponer(solicitud, 3)["opciones"]
+    assert opciones[0]["distrito"] == "DIST_VECTOR"
+    assert len({o["service_id"] for o in opciones}) == len(opciones)
