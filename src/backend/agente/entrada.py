@@ -5,6 +5,7 @@ deliberadamente laxas (basta una mención, incluso «da igual» o «cualquier d�
 la búsqueda cuando no hay ninguna pista, y el error le dice al modelo qué preguntar.
 """
 
+import difflib
 import re
 import unicodedata
 
@@ -48,8 +49,23 @@ def dijo_dias(textos: list[str]) -> bool:
     return any(_DIAS.search(_plano(t)) for t in textos)
 
 
+# Palabras de canal largas: con una errata («videoallamada», «precencial», «telefnico») el regex no calza y la búsqueda
+# quedaba frenada para siempre (la persona ya dijo el canal y el modelo se lo volvía a preguntar).
+_CANALES_PALABRAS = tuple(_colapsar(p) for p in (
+    "videollamada", "videoconferencia", "virtual", "digital", "telefono", "telefonico", "telefonica", "llamada",
+    "celular", "whatsapp", "presencial", "presenciales",
+))
+
+
+def _parecida(palabra: str, claves: tuple[str, ...]) -> bool:
+    return len(palabra) >= 6 and bool(difflib.get_close_matches(palabra, claves, n=1, cutoff=0.85))
+
+
 def dijo_canal(textos: list[str]) -> bool:
-    return any(_CANALES.search(_plano(t)) for t in textos)
+    return any(
+        _CANALES.search(plano) or any(_parecida(p, _CANALES_PALABRAS) for p in re.findall(r"[a-z]+", plano))
+        for plano in map(_plano, textos)
+    )
 
 
 def faltantes(textos: list[str]) -> list[str]:

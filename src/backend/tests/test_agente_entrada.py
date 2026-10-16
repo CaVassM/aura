@@ -47,6 +47,21 @@ def test_tolera_letras_repetidas_por_error_de_tipeo(texto):
 
 
 @pytest.mark.parametrize(
+    "texto",
+    ["Puedo martes y jueves de 3 a 6 de la tarde, por videoallamada", "por videollamda", "precencial", "por telefno"],
+)
+def test_tolera_otras_erratas_en_el_canal(texto):
+    assert dijo_canal([texto])
+
+
+@pytest.mark.parametrize(
+    "texto", ["Pero te dije el canal", "me llamaba mucho la atención", "tengo presentaciones", "mi dígito favorito"]
+)
+def test_una_palabra_parecida_no_es_un_canal(texto):
+    assert not dijo_canal([texto])
+
+
+@pytest.mark.parametrize(
     "mensaje, ultima, esperado",
     [
         ("Puedes cancelarlo?", "", True),
