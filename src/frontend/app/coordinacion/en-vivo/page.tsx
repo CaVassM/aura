@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Radio, Wifi, WifiOff } from "lucide-react";
+import { RefreshCw, Radio, Wifi, WifiOff } from "lucide-react";
 import { useActividad } from "@/components/coordinacion/ActividadProvider";
 import Barra from "@/components/coordinacion/Barra";
 import NumeroAnimado from "@/components/coordinacion/NumeroAnimado";
@@ -133,7 +133,7 @@ function Fila({ e, reciente }: { e: EventoActividad; reciente: boolean }) {
 }
 
 export default function EnVivoPage() {
-  const { eventos, conectado } = useActividad();
+  const { eventos, estado, etiquetaConexion } = useActividad();
   const [ahora, setAhora] = useState(() => Date.now());
 
   useEffect(() => {
@@ -159,12 +159,28 @@ export default function EnVivoPage() {
           </p>
         </div>
         <span
+          role="status"
+          title={
+            estado === "sondeo"
+              ? "El flujo en tiempo real no está disponible; el registro se consulta cada pocos segundos."
+              : undefined
+          }
           className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-bold ${
-            conectado ? "bg-co-sage-tint text-co-sage-ink" : "bg-co-amber-tint text-co-amber-ink"
+            estado === "en_vivo"
+              ? "bg-co-sage-tint text-co-sage-ink"
+              : estado === "sondeo"
+                ? "bg-co-teal-tint text-co-teal-dark"
+                : "bg-co-amber-tint text-co-amber-ink"
           }`}
         >
-          {conectado ? <Wifi size={15} aria-hidden="true" /> : <WifiOff size={15} aria-hidden="true" />}
-          {conectado ? "Conectado en tiempo real" : "Reconectando…"}
+          {estado === "en_vivo" ? (
+            <Wifi size={15} aria-hidden="true" />
+          ) : estado === "sondeo" ? (
+            <RefreshCw size={15} aria-hidden="true" />
+          ) : (
+            <WifiOff size={15} aria-hidden="true" />
+          )}
+          {etiquetaConexion}
         </span>
       </div>
 

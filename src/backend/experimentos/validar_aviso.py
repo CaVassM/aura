@@ -1,4 +1,7 @@
-"""Valida distribución de avisos y compara ansiedad solo de forma agregada."""
+"""Valida distribución de avisos y compara ansiedad solo de forma agregada.
+
+Regla validada: en semana de evaluaciones (D7), el aviso aparece con al menos 2 de 3 señales (caída de asistencia, baja de
+nota, carga de créditos alta). Uso: `AURA_DATA_DIR=<carpeta del Data Pack completo> python -m experimentos.validar_aviso`."""
 
 import csv
 from datetime import date
@@ -40,7 +43,7 @@ def _medir_periodo(periodo, dia, d3, d7, parametros):
     filas = calcular_senales(periodo, d3, anterior, umbrales)
     conteos = {
         puntaje: sum(fila["puntaje"] == puntaje for fila in filas)
-        for puntaje in range(5)
+        for puntaje in range(4)
     }
     avisos = estudiantes_para_aviso(periodo, dia)
     return {
@@ -53,7 +56,6 @@ def _medir_periodo(periodo, dia, d3, d7, parametros):
         "puntaje_1": conteos[1],
         "puntaje_2": conteos[2],
         "puntaje_3": conteos[3],
-        "puntaje_4": conteos[4],
         "filas_auditoria": filas,
     }
 
@@ -66,7 +68,7 @@ def _sensibilidad(periodo, d3, d7, parametros):
     pruebas = [
         ("caida_asistencia", [0.03, 0.05, 0.07]),
         ("cambio_nota", [-0.3, -0.5, -0.7]),
-        ("puntaje_minimo", [1, 2, 3]),
+        ("puntaje_minimo", [1, 2, 3]),  # con 3 señales, 3 exige las tres
     ]
     anteriores = _periodos(d7)
     idx = anteriores.index(periodo)
@@ -170,18 +172,25 @@ def _guardar_reporte(ruta: Path, resumenes, validacion, sensibilidad) -> None:
     lineas = [
         "# Validación del aviso académico",
         "",
-        "Los avisos solo se consideran durante semanas de evaluación según D7.",
+        "**Regla:** en semana de evaluaciones (D7), el aviso aparece con al menos 2 de estas 3 señales: caída de asistencia "
+        "(≥ 0,05 frente al período anterior), baja de nota (`grade_change` ≤ −0,5) y carga de créditos alta (percentil 0,75 "
+        "del período). La semana de evaluaciones es la condición, no una señal; no se usa `dropout_alert`.",
+        "",
+        "Fuente: D3 (señales), D7 (semanas de evaluación) y D1 (solo promedios por grupo). Generado por "
+        "`experimentos/validar_aviso.py`.",
         "",
         "## Cobertura y puntajes",
         "",
-        "| Periodo | Fecha evaluada | Estudiantes | Elegibles | % elegible | Puntaje 0 | Puntaje 1 | Puntaje 2 | Puntaje 3 | Puntaje 4 |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "Puntaje = cuántas de las 3 señales cumple cada estudiante.",
+        "",
+        "| Periodo | Fecha evaluada | Estudiantes | Elegibles | % elegible | Puntaje 0 | Puntaje 1 | Puntaje 2 | Puntaje 3 |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for fila in resumenes:
         lineas.append(
             f"| {fila['periodo']} | {fila['fecha']} | {fila['estudiantes']} | {fila['elegibles']} | "
             f"{fila['porcentaje_elegible']:.2f}% | {fila['puntaje_0']} | {fila['puntaje_1']} | "
-            f"{fila['puntaje_2']} | {fila['puntaje_3']} | {fila['puntaje_4']} |"
+            f"{fila['puntaje_2']} | {fila['puntaje_3']} |"
         )
     lineas.extend(
         [

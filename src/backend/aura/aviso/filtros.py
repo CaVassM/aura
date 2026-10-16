@@ -1,4 +1,7 @@
-"""Señales agregadas de trayectoria; D1 queda fuera de la decisión de elegibilidad."""
+"""Señales agregadas de trayectoria; D1 queda fuera de la decisión de elegibilidad.
+
+Regla: en semana de evaluaciones (D7), el aviso aparece con al menos `puntaje_minimo` (2) de 3 señales: caída de asistencia,
+baja de nota y carga de créditos alta. La semana de evaluaciones es la condición, no una señal."""
 
 import csv
 from datetime import date
@@ -55,7 +58,7 @@ def calcular_senales(
     periodo_anterior: str | None,
     umbrales: dict,
 ) -> list[dict]:
-    """Compara dos periodos y conserva las cuatro señales solo para auditoría."""
+    """Compara dos periodos y conserva las tres señales solo para auditoría."""
     actuales = {fila["student_id"]: fila for fila in d3 if fila["period_id"] == periodo}
     anteriores = {
         fila["student_id"]: fila
@@ -67,17 +70,15 @@ def calcular_senales(
     filas = []
     for estudiante_id, actual in actuales.items():
         previo = anteriores.get(estudiante_id)
-        s1 = actual["dropout_alert"].lower() in umbrales["dropout_alert"]
-        s2 = bool(previo) and float(previo["attendance_rate"]) - float(
+        s1 = bool(previo) and float(previo["attendance_rate"]) - float(
             actual["attendance_rate"]
         ) >= float(umbrales["caida_asistencia"])
-        s3 = float(actual["grade_change"]) <= float(umbrales["cambio_nota"])
-        s4 = float(actual["credit_load"]) >= corte_carga
+        s2 = float(actual["grade_change"]) <= float(umbrales["cambio_nota"])
+        s3 = float(actual["credit_load"]) >= corte_carga
         senales = {
-            "S1_dropout": int(s1),
-            "S2_asistencia": int(s2),
-            "S3_cambio_nota": int(s3),
-            "S4_carga_creditos": int(s4),
+            "S1_asistencia": int(s1),
+            "S2_cambio_nota": int(s2),
+            "S3_carga_creditos": int(s3),
         }
         filas.append(
             {
@@ -98,10 +99,9 @@ def _guardar_auditoria(periodo: str, dia: date, filas: list[dict]) -> None:
         "fecha",
         "estudiante_id",
         "puntaje",
-        "S1_dropout",
-        "S2_asistencia",
-        "S3_cambio_nota",
-        "S4_carga_creditos",
+        "S1_asistencia",
+        "S2_cambio_nota",
+        "S3_carga_creditos",
     ]
     previas = []
     if ruta.exists():
@@ -121,7 +121,7 @@ def _guardar_auditoria(periodo: str, dia: date, filas: list[dict]) -> None:
 def estudiantes_para_aviso(
     periodo: str, fecha: date | str
 ) -> list[dict[str, int | str]]:
-    """Entrega solo estudiante y puntaje durante semanas de evaluación de D7."""
+    """Entrega solo estudiante y puntaje (de 3 señales) durante semanas de evaluación de D7."""
     dia = date.fromisoformat(fecha) if isinstance(fecha, str) else fecha
     d3, d7 = _datos()
     parametros = cargar_yaml("parametros.yaml")["aviso"]

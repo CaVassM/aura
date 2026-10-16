@@ -28,8 +28,8 @@ export default function LotesPage() {
         <h1 className="text-3xl font-extrabold tracking-tight text-co-navy">Lotes</h1>
         <p className="mt-1 max-w-3xl text-sm font-medium leading-relaxed text-co-ink">
           Cuando un servicio llega al <strong className="font-extrabold">{num(data.umbral_pct)} %</strong> de utilización (cupos
-          reservados sobre cupos liberados), deja de ofrecer sus cupos uno a uno: las solicitudes que solo encuentran
-          servicios así esperan en un <strong className="font-extrabold">lote</strong>. El lote se cierra solo a los{" "}
+          reservados sobre cupos liberados), deja de ofrecer sus cupos uno a uno y se muestra al estudiante como una sola
+          opción «por lote»: quien la elige espera en un <strong className="font-extrabold">lote</strong>, sin que eso cuente como desencuentro. El lote se cierra solo a los{" "}
           {data.ventana_s} s de entrar la primera solicitud, o al juntar {data.tamano_maximo}, y el algoritmo genético
           reparte los cupos entre todas a la vez.
         </p>
@@ -45,7 +45,7 @@ export default function LotesPage() {
             </span>
             <p className="text-base font-extrabold text-co-navy">No hay un lote abierto</p>
             <p className="max-w-lg text-sm text-co-ink">
-              Se abre cuando un estudiante pide una cita y todo lo compatible está en servicios en modo lote. Aparecerá
+              Se abre cuando un estudiante elige una opción por lote (un servicio con mucha demanda). Aparecerá
               aquí con su cuenta regresiva.
             </p>
           </div>

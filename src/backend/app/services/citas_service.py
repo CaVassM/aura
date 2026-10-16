@@ -9,6 +9,9 @@ from .lote_service import LoteService
 from .errors import InvalidRequestError, NotFoundError, SlotTakenError, YaTieneCitaError
 
 
+TOPE_CITAS_ACTIVAS = 2
+
+
 class CitasService:
     """Lógica de citas; el motor decide disponibilidad y asignación."""
 
@@ -95,6 +98,11 @@ class CitasService:
         R7: si ya tiene una cita activa de ese tipo de servicio, falla con `ya_tiene_cita`; con `reemplazar` se reserva la
         nueva y se cancela la anterior en la misma operación. `origen` solo sirve para el registro de actividad."""
         with self._estado.lock:
+            activas = [c for c in self._estado.citas.list_by_student(estudiante_id) if c.estado == "confirmada"]
+            if len(activas) >= TOPE_CITAS_ACTIVAS:
+                raise InvalidRequestError(
+                    f"Has alcanzado el l\u00edmite de {TOPE_CITAS_ACTIVAS} citas activas. Cancela una antes de agendar otra."
+                )
             previa = self.verificar_equidad(estudiante_id, self._estado.motor.tipo_de_opcion(opcion_id), reemplazar)
             resultado = self._estado.motor.reservar(estudiante_id, opcion_id, servicio_ideal)
             if resultado.get("error") == "cupo_fuera_de_ventana":

@@ -1,6 +1,24 @@
-# Decisiones pendientes del equipo
+# Decisiones del equipo (resueltas y pendientes)
 
 Los parámetros listados como **PROVISIONAL** son valores activos del prototipo, no recomendaciones definitivas. Los renglones comentados en YAML son candidatos de conversación: no están habilitados y no cambian el motor ni las herramientas.
+
+
+
+## Resueltas para el Entregable 2
+
+| Decisión | Decisión aplicada | Fuente |
+|---|---|---|
+| Umbral de modo lote | **75 %**, un único valor en YAML; también fija el nivel «alta» de ocupación. | [parametros.yaml](../config/parametros.yaml) |
+| Aviso académico | En semana de evaluaciones (D7), al menos **2 de 3** señales: asistencia, nota y carga de créditos. La semana es condición, no señal; no se usa `dropout_alert`. | [como_funciona.md](como_funciona.md), [validacion_aviso.md](../salidas/validacion_aviso.md) |
+| R7 | Una cita activa por persona y tipo de servicio. | [parametros.yaml](../config/parametros.yaml) |
+| Propuestas y servicio preferido | Máximo 3 opciones; el servicio pedido por nombre va primero y un servicio saturado se ofrece como opción de tipo `lote`. | [api_agente.md](api_agente.md) |
+| Desencuentros | Entrar a un lote no es desencuentro; se registra solo cuando no existe una opción compatible. Se evita duplicar el mismo servicio ideal y franja dentro de una conversación. | [api_agente.md](api_agente.md), [contrato_herramientas.md](contrato_herramientas.md) |
+| Guardrails y errores de herramientas | Respuesta fija ante crisis, solicitudes clínicas o datos de profesionales; ante llamada mal formada se reintenta una vez y luego se usa una respuesta segura. | [guardrails.py](../agente/guardrails.py), [api_agente.md](api_agente.md) |
+| Modelo | Qwen 3.5 4B (`qwen3.5:4b`), pesos abiertos, local en Ollama. | [config.py](../agente/config.py) |
+| Datos | El Data Pack no se redistribuye; D1 solo participa en la validación agregada. | [README raíz](../../../README.md) |
+| Escenario de demo | Demanda ×6, 10 % de vespertinos que trabajan, `hoy = 2026-11-15`; espera = fecha de cita menos fecha de solicitud, como D2. | [como_funciona.md](como_funciona.md) |
+
+## Pendientes
 
 | Decisión | Valor actual | Alternativas para discutir | Qué cambiaría en los resultados | Fuente |
 |---|---|---|---|---|
@@ -16,11 +34,11 @@ Los parámetros listados como **PROVISIONAL** son valores activos del prototipo,
 | Duración de sesión | **60 minutos**. | Revisar con operaciones y servicios usando su duración real. | Cambia cuántos bloques caben en horarios D6 y, por tanto, la oferta calculada. | [parametros.yaml](../config/parametros.yaml), [agenda.py](../aura/motor/agenda.py) |
 | Pesos de Z | Z1 **0,35**; Z2 **0,25**; Z3 **0,10**; Z4 **0,20**; Z5 **0,10**. | Dar más importancia a cobertura, espera, balance de servicio, equidad de grupos o afinidad según prioridad institucional; mantener suma normalizada. | Cambia el intercambio que el Genético acepta entre cobertura, espera, utilización, equidad y ajuste del servicio. | [parametros.yaml](../config/parametros.yaml), [reporte.md](../salidas/reporte.md) |
 | Beta del costo | **5,0**. | Revisar cuánto debe pesar afinidad frente a espera ajustada por canal. | Un beta mayor penaliza más las alternativas con menor afinidad; uno menor puede preferir citas más tempranas. | [parametros.yaml](../config/parametros.yaml), [costo.py](../aura/motor/costo.py) |
-| Modo lote | Umbral **75 %** de utilización por servicio (acordado). Ventana **30 s** y tope **5** solicitudes: el lote se cierra solo. Entran al lote las solicitudes cuyo único compatible está en servicios en modo lote, con aceptación de la persona. | Ventana y tope (en la demo se acortan para el video); si la entrada al lote debe ser automática o con aceptación; si el lote debería reunir también solicitudes con opciones directas; revisar los límites de normalización en vivo («plan B»). | Cambia cuánto espera una persona antes de recibir su cita y cuántas solicitudes compiten juntas; con pocas solicitudes por lote el genético rara vez cambia el resultado. | [parametros.yaml](../config/parametros.yaml), [como_funciona.md](como_funciona.md) |
-| Protocolo de crisis del agente | Si el mensaje contiene señales de autolesión o suicidio (lista de frases en `agente/crisis.py`), el agente responde un texto fijo que remite a los servicios de emergencia de la zona y a «la línea de ayuda de tu institución», y no agenda en ese mensaje. | Definir con Bienestar el texto y cuál es la línea de ayuda de la red de Aethera (se configura en `AURA_LINEA_AYUDA`), y si debe avisarse a un profesional humano. | Cambia la respuesta ante mensajes sensibles; no afecta el motor ni la asignación. | [crisis.py](../agente/crisis.py) |
+| Modo lote | **Resuelto:** umbral 75 %, la persona elige la opción de tipo `lote` y entrar no registra desencuentro. **Pendiente:** confirmar ventana de 30 s y tope de 5, y si los lotes deben admitir solicitudes que también tienen opciones directas. | Revisar si el cierre debe ser más corto en la demo de video. | Cambia cuánto espera una persona y cuántas solicitudes compiten juntas. | [parametros.yaml](../config/parametros.yaml), [como_funciona.md](como_funciona.md) |
+| Protocolo de crisis del agente | **Implementado:** responde con texto fijo, remite a emergencias y no agenda en ese mensaje. **Pendiente:** Bienestar debe confirmar el texto institucional, la línea de ayuda de la red (`AURA_LINEA_AYUDA`) y si se avisa a un profesional humano. | Definir el texto y los datos de contacto institucionales. | Cambia la respuesta ante mensajes sensibles; no afecta la asignación. | [crisis.py](../agente/crisis.py) |
 | Vida académica simulada del campus | Cursos, horarios, notas y asistencia **inventados** para los 4 perfiles de la demo; escala 1,0–7,0 (aprueba 4,0), asistencia mínima 70 %, sin clases en semanas de evaluación. Lo real es el calendario D7. El agente solo accede a la **asistencia**. | Cuando existan D3 y la matrícula real: leer de ahí; confirmar mínimo de asistencia, escala y si hay clases en semanas de evaluación y en la pausa de bienestar de Gaia. | Solo cambia lo que muestran Mis cursos, Calificaciones y Calendario y lo que el agente cuenta de la asistencia; no afecta el motor ni el aviso. | [academico_repository.py](../app/repositories/academico_repository.py), [api_agente.md](api_agente.md) |
-| Lista de espera y aviso proactivo | Lista de espera: con aceptación de la persona, se avisa **dentro del campus** al cancelarse una cita, en orden de llegada, sin retener el cupo. Aviso proactivo: S1 es la temporada de evaluación (D7), mínimo 3 de 4 y solo en semana de evaluaciones; la persona puede darlo de baja. | Si el cupo debe retenerse unos minutos para quien recibe el aviso; vencimiento de la espera; canal externo (WhatsApp) para el aviso; si S1 debe graduarse por `evaluation_intensity` (intermedias 2, finales 3). | Cambia a quién se muestra el aviso y cuántos desencuentros se recuperan; el motor de asignación no cambia. | [lista_espera_service.py](../app/services/lista_espera_service.py), [aviso_proactivo_service.py](../app/services/aviso_proactivo_service.py) |
+| Lista de espera y aviso proactivo | Lista de espera: se avisa dentro del campus, en orden de llegada, sin retener cupo. Aviso proactivo **resuelto:** 2 de 3 señales en semana de evaluación, con opción de baja. | Retención temporal de cupo, caducidad y canales externos; revisar si D7 debe diferenciar evaluaciones intermedias y finales. | Cambia la recuperación de desencuentros y el momento de contacto. | [lista_espera_service.py](../app/services/lista_espera_service.py), [aviso_proactivo_service.py](../app/services/aviso_proactivo_service.py) |
 
 ## Propuesta de trabajo
 
-Primero acordar mapas de motivo y afinidad con orientación; después revisar el peso de equidad frente a cobertura con los resultados por semilla; finalmente especificar el disparador del modo lote. Hasta entonces, los parámetros marcados **PROVISIONAL** deben tratarse como supuestos de prototipo.
+Siguen pendientes la validación de los mapas de motivo y afinidad con orientación y la revisión de los pesos de equidad frente a cobertura entre semillas. Los parámetros marcados **PROVISIONAL** siguen siendo supuestos del prototipo.

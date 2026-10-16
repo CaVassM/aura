@@ -7,7 +7,12 @@ export function useCuentaAnimada(objetivo: number, duracionMs = 1000, retrasoMs 
   const [valor, setValor] = useState(0);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    // Si la animación no puede correr (movimiento reducido, pestaña oculta o sin rAF) se muestra el valor final.
+    const sinAnimacion =
+      typeof window.requestAnimationFrame !== "function" ||
+      document.hidden ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (sinAnimacion) {
       setValor(objetivo);
       return;
     }
@@ -22,9 +27,19 @@ export function useCuentaAnimada(objetivo: number, duracionMs = 1000, retrasoMs 
       };
       cuadro = requestAnimationFrame(paso);
     }, retrasoMs);
-    return () => {
+    const terminar = () => {
       window.clearTimeout(arranque);
       cancelAnimationFrame(cuadro);
+      setValor(objetivo);
+    };
+    const seguro = window.setTimeout(terminar, retrasoMs + duracionMs + 300); // rAF no corre en una pestaña oculta
+    const alCambiarVisibilidad = () => document.hidden && terminar();
+    document.addEventListener("visibilitychange", alCambiarVisibilidad);
+    return () => {
+      window.clearTimeout(arranque);
+      window.clearTimeout(seguro);
+      cancelAnimationFrame(cuadro);
+      document.removeEventListener("visibilitychange", alCambiarVisibilidad);
     };
   }, [objetivo, duracionMs, retrasoMs]);
 

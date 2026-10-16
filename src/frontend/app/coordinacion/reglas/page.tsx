@@ -110,9 +110,8 @@ export default function ReglasPage() {
             <p className="mt-5 flex gap-2 border-l-4 border-co-teal bg-co-teal-tint px-4 py-3 text-sm font-medium text-co-navy">
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-co-teal" aria-hidden="true" />
               <span>
-                Se muestra aviso únicamente con {r.aviso.puntaje_minimo} o más señales
-                {r.aviso.solo_semanas_evaluacion && " y solo durante semanas de evaluaciones"}. Estas
-                señales nunca se muestran al estudiante.
+                {r.aviso.regla} La semana de evaluaciones es la condición, no una señal. Las señales nunca se muestran al estudiante:
+                solo ve una tarjeta opcional, justificada por la semana de evaluaciones.
               </span>
             </p>
           </ReglaCard>
@@ -143,6 +142,39 @@ export default function ReglasPage() {
                     <Barra pct={t.peso * 100} color="bg-co-amber" retraso={i * 80} />
                   </li>
                 ))}
+              </ul>
+            </ReglaCard>
+          </div>
+
+          <div className="grid gap-10 md:grid-cols-2">
+            <ReglaCard numero="06" titulo="Equidad (R7)" termino="regla_equidad" provisional={r.equidad.provisional}>
+              <p className="text-sm font-medium text-co-ink">
+                Máximo{" "}
+                <strong className="tabular text-2xl font-extrabold text-co-navy">{r.equidad.max_citas_activas_por_tipo}</strong>{" "}
+                cita activa por estudiante y tipo de servicio dentro del horizonte.
+              </p>
+              <p className="mt-3 text-sm font-medium text-co-ink">
+                Si ya tiene una y pide otra del mismo tipo, AURA se lo dice y le ofrece cambiarla: si confirma, se cancela la anterior y se
+                reserva la nueva en una sola operación.
+              </p>
+            </ReglaCard>
+
+            <ReglaCard numero="07" titulo="Modo lote" termino="regla_lote" provisional={r.modo_lote.provisional}>
+              <p className="text-sm font-medium text-co-ink">
+                Un servicio pasa a modo lote desde{" "}
+                <strong className="tabular text-2xl font-extrabold text-co-navy">{numFijo(r.modo_lote.umbral_pct, 0)} %</strong> de utilización
+                (el mismo corte que el nivel «alta» de ocupación).
+              </p>
+              <ul className="mt-3 space-y-1 text-sm font-medium text-co-ink">
+                <li>
+                  El lote se cierra solo a los <strong className="tabular text-co-navy">{r.modo_lote.ventana_s} s</strong> o al juntar{" "}
+                  <strong className="tabular text-co-navy">{r.modo_lote.tamano_maximo}</strong> solicitudes.
+                </li>
+                <li>
+                  Cada propuesta muestra como máximo <strong className="tabular text-co-navy">{r.modo_lote.max_opciones}</strong> opciones; un
+                  servicio en lote sale como una sola opción.
+                </li>
+                <li>Entrar a un lote no registra un desencuentro.</li>
               </ul>
             </ReglaCard>
           </div>

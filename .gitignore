@@ -36,3 +36,15 @@ Prototipo web AURA.zip
 # Logs del script iniciar
 logs/
 capturas/
+
+# Artefactos locales y secretos de desarrollo
+.env.*
+!.env.example
+!.env.local.example
+node_modules/
+.next/
+out/
+scratchpad/
+*.tsbuildinfo
+src/backend/salidas/*.csv
+src/backend/salidas/*.json

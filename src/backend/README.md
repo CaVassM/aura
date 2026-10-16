@@ -17,7 +17,7 @@ src/backend/
 │   ├── models/                   #   entidades (Cita)
 │   └── cli_siembra.py            #   resumen por consola de la siembra
 │
-├── agente/                       # AGENTE CONVERSACIONAL — LangChain + Ollama (gemma4)
+├── agente/                       # AGENTE CONVERSACIONAL — LangChain + Ollama (Qwen 3.5 4B)
 ├── aura/                         # MOTOR DE ASIGNACIÓN — servicio independiente
 │   ├── servicio.py               #   ÚNICA puerta de entrada: ServicioAsignacion
 │   ├── motor/  herramientas/  aviso/  datos/
@@ -63,7 +63,7 @@ Swagger en `http://localhost:8080/docs`. El arranque tarda unos segundos (constr
 $env:AURA_DATA_DIR = "ruta\DataPack_Aethera_Oleada1"
 ```
 
-El Data Pack no se copia al repo salvo D1, D2, D6 y D7 en `data_pack/`; las respuestas de la API nunca devuelven filas crudas.
+El Data Pack completo no se redistribuye con AURA y debe obtenerse por separado; configura su carpeta con `AURA_DATA_DIR`. La API nunca devuelve filas crudas. D1 solo se usa en la validaci?n de promedios agregados, no en filtros individuales.
 
 ## Endpoints (prefijo `/api`)
 

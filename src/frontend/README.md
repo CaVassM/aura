@@ -15,8 +15,8 @@ usa el backend real** (`src/backend`, FastAPI) a través de `lib/api.ts`:
 ## 1. Instalar y correr
 
 ```bash
-cd aura-frontend
-npm install
+cd src/frontend
+npm ci
 npm run dev
 ```
 

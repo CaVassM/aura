@@ -38,7 +38,7 @@ el tamaño real se indica en cada caso). Prefijo común: `/api`. Esquemas comple
   `demanda_del_tipo` es la fila de su tipo (toda la demanda del tipo, no solo la de ese local) y `recibidos_como_alternativa` cuenta las citas
   de ese servicio cuyo pedido pedía otro tipo. Solo cuentan citas que conocen su servicio ideal: todas las sembradas y las reservas en vivo
   que envíen `servicio_ideal` (el de la propuesta).
-- **Nivel:** `baja` < 50, `media` 50–70, `alta` > 70 (`coordinacion.nivel_ocupacion`). `alta_demanda` = nivel `alta`.
+- **Nivel:** `baja` < 50, `media` 50–75, `alta` ≥ 75, el umbral del modo lote (`baja_menor_que` en `coordinacion.nivel_ocupacion`; el 75 sale de `modo_lote_umbral_utilizacion`, un solo valor en el YAML). `alta_demanda` = nivel `alta`.
 - **Espera** = `fecha_cupo − fecha_solicitud`, en días: la misma definición que `wait_days` en D2, así la comparación con la línea base es justa.
   `espera_media_dias` es la media sobre todas las citas sembradas; `espera_linea_base_dias` es la media observada en D2 (≈ 41,96).
 - **Grupo** (`diurno`/`nocturno`) es el que trae la solicitud; la franja se muestra tal cual. El front no debe deducir el grupo por la hora.
@@ -88,7 +88,7 @@ el tamaño real se indica en cada caso). Prefijo común: `/api`. Esquemas comple
   "espera_linea_base_dias": 41.96,
   "umbrales_nivel": {
     "baja_menor_que": 50.0,
-    "alta_mayor_que": 70.0
+    "alta_desde": 75.0
   }
 }
 ```
@@ -122,7 +122,7 @@ Devuelve lo mismo que `/api/demo/estado`. Tras la llamada, recargar todos los da
   "espera_linea_base_dias": 41.96,
   "umbrales_nivel": {
     "baja_menor_que": 50.0,
-    "alta_mayor_que": 70.0
+    "alta_desde": 75.0
   }
 }
 ```
@@ -497,7 +497,7 @@ DES-0000037,2026-11-13,social_support,Apoyo social,peer_support,Apoyo entre pare
 
 ## GET /api/coordinacion/reglas
 
-Cinco bloques en solo lectura; los valores técnicos de los datos llegan traducidos (`umbral_texto`: «media o alta»; `umbral` conserva el valor de la configuración); cada uno trae `provisional` (leído de `tablas.yaml`). Ejemplo recortado:
+Siete bloques en solo lectura; los valores técnicos de los datos llegan traducidos (`umbral_texto`: «media o alta»; `umbral` conserva el valor de la configuración); cada uno trae `provisional` (leído de `tablas.yaml`). Ejemplo recortado:
 
 ```json
 {
@@ -562,23 +562,32 @@ Cinco bloques en solo lectura; los valores técnicos de los datos llegan traduci
   },
   "aviso": {
     "provisional": false,
-    "puntaje_minimo": 3,
+    "puntaje_minimo": 2,
+    "total_senales": 3,
+    "regla": "En semana de evaluaciones (D7), el aviso aparece con al menos 2 de estas 3 señales: caída de asistencia, baja de nota, carga de créditos alta.",
     "solo_semanas_evaluacion": true,
     "evento_evaluacion": "evaluation_week",
     "senales": [
       {
         "id": "S1",
-        "nombre": "Temporada de evaluación",
-        "descripcion": "Hoy cae en una semana de evaluaciones del calendario académico (D7).",
-        "umbral": "evaluation_week",
-        "umbral_texto": "una semana de evaluaciones"
-      },
-      {
-        "id": "S2",
         "nombre": "Caída de asistencia",
         "descripcion": "La tasa de asistencia bajó al menos 0,05 frente al período anterior.",
         "umbral": 0.05,
         "umbral_texto": "0,05"
+      },
+      {
+        "id": "S2",
+        "nombre": "Baja de nota",
+        "descripcion": "El cambio de nota es menor o igual que −0,5.",
+        "umbral": -0.5,
+        "umbral_texto": "−0,5"
+      },
+      {
+        "id": "S3",
+        "nombre": "Carga de créditos alta",
+        "descripcion": "Los créditos están en el percentil 0,75 o más del período.",
+        "umbral": 0.75,
+        "umbral_texto": "0,75"
       }
     ]
   },
@@ -616,9 +625,22 @@ Cinco bloques en solo lectura; los valores técnicos de los datos llegan traduci
         "peso": 0.25
       }
     ]
+  },
+  "equidad": {
+    "provisional": false,
+    "max_citas_activas_por_tipo": 1
+  },
+  "modo_lote": {
+    "provisional": false,
+    "umbral_pct": 75.0,
+    "ventana_s": 30,
+    "tamano_maximo": 5,
+    "max_opciones": 3
   }
 }
 ```
+
+`aviso` describe la regla: la semana de evaluaciones es la **condición** (`solo_semanas_evaluacion`, `evento_evaluacion`) y hay **3 señales** (S1 caída de asistencia, S2 baja de nota, S3 carga de créditos alta); `regla` trae la frase lista para mostrar. `equidad` es R7 (una cita activa por persona y tipo de servicio). `modo_lote.umbral_pct` es el mismo valor que el nivel «alta» de ocupación.
 
 ## Vista del estudiante (mismo estado)
 
@@ -628,8 +650,9 @@ Se usan en la etapa siguiente. **Cambio:** estos endpoints devuelven y reciben *
 |---|---|---|
 | GET | `/api/services` | Servicios de la red (con `tipo_label`) |
 | GET | `/api/services/{service_id}/slots` | Cupos libres de un servicio |
-| POST | `/api/appointments/proposals?k=3` | Opciones compatibles (no reserva) |
-| POST | `/api/appointments` | Reserva `{estudiante_id, opcion_id, servicio_ideal?}`; 409 si el cupo ya fue tomado |
+| POST | `/api/appointments/proposals?k=3` | **Hasta 3** opciones compatibles (no reserva; un `k` mayor se recorta). Acepta `service_id_preferido` (id o nombre de un servicio) en el cuerpo |
+| POST | `/api/appointments` | Reserva `{estudiante_id, opcion_id, servicio_ideal?, reemplazar?}`; 409 `cupo_ya_tomado` si el cupo ya fue tomado; 409 `ya_tiene_cita` (R7) si ya tiene una cita activa de ese tipo de servicio (con `reemplazar: true` se cancela la anterior en la misma operación) |
+| POST | `/api/appointments/lote` | Entra a un lote (una opción de tipo `lote`); nunca registra un desencuentro |
 | GET | `/api/appointments?estudiante_id=` | Citas del estudiante |
 | DELETE | `/api/appointments/{cita_id}` | Cancela y libera el cupo |
 
@@ -669,6 +692,7 @@ responde (k=1):
   "opciones": [
     {
       "opcion_id": "C0002328|phone",
+      "tipo_opcion": "cupo",
       "service_id": "SRV_AE_005",
       "servicio_nombre": "Espacio Lumen Pares",
       "tipo": "peer_support",
@@ -684,9 +708,13 @@ responde (k=1):
     }
   ],
   "servicio_ideal": "peer_support",
-  "motivo_vacio": null
+  "motivo_vacio": null,
+  "mensaje": null,
+  "preferido": null
 }
 ```
+
+`mensaje` es el texto que redacta el backend para los casos especiales (sin cupos, servicio en lote, servicio pedido sin cupo). Un servicio en modo lote sale como **una opción** `{"opcion_id": "LOTE|SRV_AE_004", "tipo_opcion": "lote", "cupos_libres", "tiempo_respuesta_s", "mensaje": "Este servicio tiene mucha demanda; sus cupos se reparten en grupo. Te confirmo en unos segundos."}` (sin día, hora ni canal; en la interfaz, «Asignación en grupo»).
 
 `POST /api/appointments` con `{"estudiante_id": "STU_DEMO_001", "opcion_id": "C0002328|phone"}` responde 201:
 
@@ -705,11 +733,14 @@ responde (k=1):
     "canales": ["phone"]
   },
   "canal": "phone",
-  "estado": "confirmada"
+  "estado": "confirmada",
+  "aviso_canal": "Te llamarán al número registrado."
 }
 ```
 
-Un segundo intento sobre la misma opción responde 409 `{   "error": "cupo_ya_tomado",   "detalle": "C0002328|phone" }`.
+`aviso_canal` es la línea de la confirmación según el canal: videollamada «El servicio te enviará el enlace a tu correo institucional antes de la cita.», teléfono «Te llamarán al número registrado.», presencial el servicio y su distrito.
+
+Una segunda cita del mismo tipo de servicio para la misma persona responde 409 `ya_tiene_cita` con `{cita, mensaje}` (R7). Un segundo intento sobre la misma opción responde 409 `{   "error": "cupo_ya_tomado",   "detalle": "C0002328|phone" }`.
 `GET /api/services/{service_id}/slots` devuelve 11 cupos libres para el primer servicio; cada uno: `{   "id": "C0002110",   "service_id": "SRV_AE_001",   "fecha_iso": "2026-11-25T09:00:00",   "disponible": true,   "canales": ["in_person", "digital"] }`
 (la opción a reservar es `<id>|<canal>`).
 
@@ -723,6 +754,7 @@ Un segundo intento sobre la misma opción responde 409 `{   "error": "cupo_ya_to
 - Desencuentros: si un filtro deja la tabla vacía, estado vacío con mensaje explicativo (usar `insight.texto`).
 - Resumen: KPI «Atendidos con alternativa afín» y tabla «Demanda real por tipo de servicio» (`demanda_por_tipo`); detalle del servicio: bloque «Demanda de {tipo}».
 - Los textos de los ⓘ viven en `lib/glosario.ts` y se rellenan con `/api/demo/estado`; el embudo de cupos usa los 4 campos por servicio.
+- Una opción con `tipo_opcion: "lote"` se muestra como «Asignación en grupo» (sin día ni hora); al elegirla la solicitud queda pendiente y el resultado llega al chat por los avisos en vivo.
 - Reinicio: botón «Reiniciar demo» → `POST /api/demo/reiniciar` y recargar.
 - Los endpoints del estudiante pasaron a snake_case.
 
@@ -757,7 +789,7 @@ Cada evento:
 - `event: reinicio` si se reinicia la demo con el flujo abierto.
 - Un comentario `: ping` cada 15 s para mantener la conexión.
 
-`EventSource` reconecta solo y reenvía `Last-Event-ID`; el servidor no repite lo ya entregado. El frontend (`components/coordinacion/ActividadProvider.tsx`) carga primero `GET /actividad` y luego abre el flujo con `desde=ultimo_id`.
+`EventSource` reconecta solo y reenvía `Last-Event-ID`; el servidor no repite lo ya entregado. El frontend (`components/coordinacion/ActividadProvider.tsx`) carga primero `GET /actividad` y luego abre el flujo con `desde=ultimo_id`. Si el flujo no llega (un túnel o proxy que lo corta), consulta `GET /actividad?desde=<ultimo_id>` cada 3 s y el indicador de En vivo dice «Actualizando cada 3 s» (con el flujo activo dice «En vivo»).
 
 
 ## Modo lote

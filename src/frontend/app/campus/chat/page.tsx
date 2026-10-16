@@ -12,12 +12,11 @@ import ChatBubble, { AvatarAura } from "@/components/chat/ChatBubble";
 import { CitaCancelada, CitaConfirmada } from "@/components/chat/CitaConfirmada";
 import Escribiendo from "@/components/chat/Escribiendo";
 import LoteEnEspera from "@/components/chat/LoteEnEspera";
-import LoteOfertaCard from "@/components/chat/LoteOfertaCard";
 import OpcionCard from "@/components/chat/OpcionCard";
 import { ApiError, chatEnviar, chatHistorial, chatReiniciar } from "@/lib/api";
 import { fechaConDia } from "@/lib/format";
 import { nombreDistrito, PerfilEstudiante } from "@/lib/perfiles";
-import { AvisoEstudiante, ChatMessage, Opcion } from "@/lib/types";
+import { AvisoEstudiante, ChatMessage, esLote, Opcion } from "@/lib/types";
 
 const uid = () => Math.random().toString(36).slice(2);
 const claveSesion = (estudianteId: string) => `aura:chat:${estudianteId}`;
@@ -156,7 +155,6 @@ export default function ChatPage() {
             desencuentro: res.desencuentro_registrado || undefined,
             listaEspera: !!res.lista_espera || undefined,
             lote: res.lote ?? undefined,
-            loteOferta: res.lote_oferta ?? undefined,
             crisis: res.alerta_crisis || undefined,
           },
         ]);
@@ -189,7 +187,9 @@ export default function ChatPage() {
 
   const elegir = (o: Opcion, numero: number) =>
     enviar(
-      `Quiero la opción ${numero}: ${o.servicio_nombre}, ${fechaConDia(o.fecha)}, ${o.hora_inicio}`,
+      esLote(o)
+        ? `Quiero la opción ${numero}: ${o.servicio_nombre}, asignación en grupo`
+        : `Quiero la opción ${numero}: ${o.servicio_nombre}, ${fechaConDia(o.fecha)}, ${o.hora_inicio}`,
       o.opcion_id,
     );
 
@@ -208,12 +208,8 @@ export default function ChatPage() {
   // Solo la lista de opciones más reciente se puede elegir, y únicamente si no se reservó después.
   const ultimaConOpciones = [...mensajes].reverse().find((m) => m.opciones)?.id;
   const indiceUltima = mensajes.findIndex((m) => m.id === ultimaConOpciones);
-  const reservadaDespues = mensajes.slice(indiceUltima + 1).some((m) => m.cita);
+  const reservadaDespues = mensajes.slice(indiceUltima + 1).some((m) => m.cita || m.lote);
   const soloSaludo = mensajes.length === 1;
-  // La oferta de lote solo se puede aceptar mientras es la más reciente y nadie entró todavía.
-  const ultimaOferta = [...mensajes].reverse().find((m) => m.loteOferta)?.id;
-  const indiceOferta = mensajes.findIndex((m) => m.id === ultimaOferta);
-  const yaEntro = mensajes.slice(indiceOferta + 1).some((m) => m.lote);
 
   return (
     <PortalShell
@@ -310,17 +306,6 @@ export default function ChatPage() {
                       </div>
                     )}
 
-                    {m.loteOferta && (
-                      <div className="ml-0 max-w-xl sm:ml-11">
-                        <LoteOfertaCard
-                          oferta={m.loteOferta}
-                          conOpciones={!!m.opciones?.length}
-                          activa={m.id === ultimaOferta && !yaEntro && !enviando && !mensajes.slice(indiceOferta + 1).some((x) => x.cita)}
-                          onEntrar={() => enviar("Sí, quiero entrar al lote")}
-                          onCambiar={() => campo.current?.focus()}
-                        />
-                      </div>
-                    )}
                     {m.lote && (
                       <div className="ml-0 max-w-xl sm:ml-11">
                         <LoteEnEspera lote={m.lote} resuelto={mensajes.slice(indice + 1).some((x) => x.aviso?.startsWith("lote_") && x.aviso !== "lote_en_espera")} />

@@ -23,7 +23,7 @@ export interface EstadoDemo {
   ocupacion_inicial_pct: number; // % de cupos que el servicio ya tenía ocupados
   fraccion_liberada_pct: number; // % de los cupos libres que presta a AURA
   espera_linea_base_dias: number; // espera media observada en D2
-  umbrales_nivel: { baja_menor_que: number; alta_mayor_que: number };
+  umbrales_nivel: { baja_menor_que: number; alta_desde: number };
 }
 
 export interface Rango {
@@ -240,6 +240,9 @@ export interface Reglas {
   aviso: {
     provisional: boolean;
     puntaje_minimo: number;
+    total_senales: number;
+    /** «En semana de evaluaciones (D7), el aviso aparece con al menos 2 de estas 3 señales: …» */
+    regla: string;
     solo_semanas_evaluacion: boolean;
     evento_evaluacion: string | null;
     senales: {
@@ -257,6 +260,19 @@ export interface Reglas {
   pesos: {
     provisional: boolean;
     terminos: { id: string; nombre: string; peso: number }[];
+  };
+  /** R7: citas activas que puede tener una persona por tipo de servicio. */
+  equidad: {
+    provisional: boolean;
+    max_citas_activas_por_tipo: number;
+  };
+  /** Umbral único del modo lote (el mismo que el nivel «alta» de ocupación). */
+  modo_lote: {
+    provisional: boolean;
+    umbral_pct: number;
+    ventana_s: number;
+    tamano_maximo: number;
+    max_opciones: number;
   };
 }
 

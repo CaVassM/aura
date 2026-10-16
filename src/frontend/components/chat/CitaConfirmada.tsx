@@ -67,6 +67,8 @@ export function CitaConfirmada({ cita, etiqueta = "Cita confirmada" }: { cita: C
         </div>
       </dl>
 
+      {cita.aviso_canal && <p className="mt-3 text-sm font-semibold text-co-teal-tint">{cita.aviso_canal}</p>}
+
       <Link
         href="/campus/citas"
         className="co-foco mt-4 inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-co-teal-deep transition hover:bg-co-bg"

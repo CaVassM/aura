@@ -123,10 +123,14 @@ def test_aviso_proactivo_se_muestra_solo_a_quien_cumple_la_regla(client_fresco):
         return {s["id"] for s in a["senales"] if s["cumple"]}
 
     lucia, mateo, diego = estado("STU_DEMO_001"), estado("STU_DEMO_002"), estado("STU_DEMO_004")
-    # Hoy es semana de evaluaciones: S1 la cumplen todos; el resto depende de cada persona
-    assert cumplen(lucia) == {"S1", "S2", "S3", "S4"} and lucia["mostrar"] and lucia["puntaje"] == 4
-    assert cumplen(diego) == {"S1", "S2", "S4"} and diego["mostrar"] and diego["minimo"] == 3
-    assert cumplen(mateo) == {"S1"} and not mateo["elegible"] and not mateo["mostrar"]
+    # Hoy es semana de evaluaciones (la condición): el aviso aparece con al menos 2 de las 3 señales
+    # (S1 caída de asistencia, S2 baja de nota, S3 carga de créditos alta)
+    assert cumplen(lucia) == {"S1", "S2", "S3"} and lucia["mostrar"] and lucia["puntaje"] == 3 and lucia["minimo"] == 2
+    assert cumplen(diego) == {"S1", "S3"} and diego["mostrar"] and diego["puntaje"] == 2
+    assert cumplen(mateo) == set() and not mateo["elegible"] and not mateo["mostrar"]
+    assert len(lucia["senales"]) == 3 and {s["nombre"] for s in lucia["senales"]} == {
+        "Caída de asistencia", "Baja de nota", "Carga de créditos alta"}
+    assert len([s for s in lucia["senales"] if s["cumple"]]) >= 2  # Lucía cumple de verdad al menos 2 de las 3
     assert lucia["semana"]["inicio"] == "2026-11-09"
 
 

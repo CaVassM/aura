@@ -1,7 +1,7 @@
 """Conversar con el agente desde la terminal, sin frontend (sirve para probar el modelo y las herramientas).
 
     python -m app.cli_chat                      # persona STU_DEMO_001
-    python -m app.cli_chat --distrito DIST_GAIA --grupo diurno --modelo gemma4
+    python -m app.cli_chat --distrito DIST_GAIA --grupo diurno --modelo qwen3.5:4b
 
 Comandos: /nuevo (empieza otra conversación), /citas (lista las citas), /desencuentros (los registrados
 por esta persona), /salir.

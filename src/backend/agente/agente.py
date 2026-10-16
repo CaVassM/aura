@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from . import guardrails
 from .config import ConfigAgente
 from .crisis import detectar_crisis, mensaje_crisis
+from .entrada import detectar_inyeccion
 from .errores import AgenteNoDisponible
 from .herramientas import ContextoTurno, EventoHerramienta, construir_herramientas
 from .prompt import construir_prompt
@@ -120,7 +121,17 @@ class AgenteAura:
             sesion.tocar()
             return ResultadoTurno(texto, crisis=True)
 
-        limite = guardrails.evaluar(mensaje)  # capa determinística: ni medicamentos, ni diagnósticos, ni contactos
+        if detectar_inyeccion(mensaje):
+            texto = (
+                "Soy AURA, la asistente de citas de bienestar estudiantil. No puedo cambiar de rol, "
+                "ignorar mis directivas de seguridad ni realizar tareas fuera de mi funci?n. "
+                "?En qu? puedo ayudarte respecto a tus citas de apoyo?"
+            )
+            sesion.mensajes += [HumanMessage(mensaje), AIMessage(texto)]
+            sesion.tocar()
+            return ResultadoTurno(texto)
+
+        limite = guardrails.evaluar(mensaje)  # capa determin?stica: ni medicamentos, ni diagn?sticos, ni contactos
         if limite:
             sesion.mensajes += [HumanMessage(mensaje), AIMessage(limite.texto)]
             sesion.tocar()

@@ -20,7 +20,7 @@ import ReiniciarDemo from "./ReiniciarDemo";
 export default function CoordinacionShell({ children }: { children: ReactNode }) {
   const ruta = usePathname();
   const { estado, error, cargando, reintentar } = useDemo();
-  const { sinVer, conectado, loteAbierto } = useActividad();
+  const { sinVer, conectado, etiquetaConexion, estado: conexion, loteAbierto } = useActividad();
 
   return (
     <div className="flex min-h-screen bg-co-bg text-co-navy">
@@ -70,8 +70,10 @@ export default function CoordinacionShell({ children }: { children: ReactNode })
                       </span>
                     )}
                     <span
-                      className={`h-2 w-2 rounded-full ${conectado ? "bg-co-sage animate-breathe" : "bg-co-amber"}`}
-                      title={conectado ? "Conectado en tiempo real" : "Reconectando…"}
+                      className={`h-2 w-2 rounded-full ${
+                        conectado ? "bg-co-sage animate-breathe" : conexion === "sondeo" ? "bg-co-teal" : "bg-co-amber"
+                      }`}
+                      title={etiquetaConexion}
                       aria-hidden="true"
                     />
                   </span>

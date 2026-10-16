@@ -4,6 +4,8 @@ El agente conversacional detecta el motivo, reúne preferencias y llama las herr
 
 ## `proponer_opciones(solicitud, k=3)`
 
+Devuelve **como máximo 3 opciones** (`max_opciones` en `parametros.yaml`; un `k` mayor se recorta). Primero van las del servicio que la persona pidió por nombre (`service_id_preferido` dentro de la solicitud: un id o un nombre como «Brújula») o, si no pidió ninguno, las del servicio ideal; las alternativas afines solo completan si faltan. Si se pasan `servicios_lote` (los de modo lote), cada uno sale como **una sola opción** de tipo `lote`.
+
 Entrada:
 
 ```json
@@ -23,6 +25,7 @@ Salida resumida:
 {
   "opciones": [{
     "opcion_id": "C0000123|digital",
+    "tipo_opcion": "cupo",
     "service_id": "SRV_AE_001",
     "servicio_nombre": "Espacio Brújula Orientación",
     "tipo": "counseling",
@@ -35,11 +38,17 @@ Salida resumida:
     "es_alternativa": false,
     "afinidad": 1.0
   }],
-  "servicio_ideal": "counseling"
+  "servicio_ideal": "counseling",
+  "preferido": null,
+  "mensaje": null
 }
 ```
 
-Si no existe opción: `{"opciones": [], "motivo_vacio": "sin_cupos_compatibles"}`. La propuesta no retiene ni reserva el cupo.
+Una opción de lote no trae día ni hora: `{"opcion_id": "LOTE|SRV_AE_004", "tipo_opcion": "lote", "service_id", "servicio_nombre", "tipo", "distrito", "cupos_libres", "tiempo_respuesta_s", "mensaje": "Este servicio tiene mucha demanda; sus cupos se reparten en grupo. Te confirmo en unos segundos."}`.
+
+Toda respuesta trae `mensaje`: el texto que redacta el backend para los casos especiales (sin cupos, servicio en lote, servicio pedido sin cupo), para que el LLM no tenga que inventar la explicación. Con `service_id_preferido`, `preferido` dice si se encontró el servicio y si tiene cupos; si no los tiene, trae su `fecha_mas_cercana` y la `mejor_alternativa_mismo_tipo` en otro servicio.
+
+Si no existe opción: `{"opciones": [], "motivo_vacio": "sin_cupos_compatibles", "mensaje": "No encontré cupos…"}`. La propuesta no retiene ni reserva el cupo.
 
 ## `reservar(estudiante_id, opcion_id)`
 
@@ -59,12 +68,12 @@ Recibe la misma estructura que `proponer_opciones` y guarda en RAM servicio idea
 
 Un LLM rara vez manda el JSON perfecto. `aura.herramientas.validacion` normaliza lo razonable y, si algo no sirve, devuelve un error que dice cómo corregirlo (los valores válidos van en el `detalle`):
 
-- `solicitud` puede llegar como objeto o como texto JSON; `k` como número o texto (máximo 20).
+- `solicitud` puede llegar como objeto o como texto JSON; `k` como número o texto (se recorta a 3).
 - `canales_aceptables`: lista o texto («videollamada, teléfono»); acepta `digital`/`phone`/`in_person` y sus nombres en español.
 - `franjas`: lista (o una sola franja); días `Mon…Sun`, `Tuesday` o `martes`/`miércoles`; horas `9:00` o `09:00`; `desde` debe ser anterior a `hasta`.
 - `distrito` (sin importar mayúsculas), `grupo` y `motivo` se validan contra el Data Pack y `tablas.yaml`.
 - Una solicitud inválida en `proponer_opciones` devuelve `{"opciones": [], "motivo_vacio": "solicitud_invalida", "detalle": "…"}`; en `ejecutar_herramienta`, argumentos inservibles devuelven `{"ok": false, "error": "argumentos_invalidos", "detalle": "…"}`. Nada lanza excepciones.
-- `proponer_opciones` sin resultados agrega una `sugerencia` (ampliar días u horarios, aceptar otro canal o registrar el desencuentro). Cada opción incluye `dia_semana` y `canal_label` en español.
+- `proponer_opciones` sin resultados agrega un `mensaje` y una `sugerencia`: no ofrecer otros días, horas ni canales que la persona no dijo, registrar el desencuentro y ofrecer la lista de espera. Cada opción incluye `dia_semana` y `canal_label` en español.
 - `reservar`: un `opcion_id` mal formado o con canal inexistente devuelve `opcion_invalida`; `cupo_ya_tomado` queda solo para cupos realmente ocupados.
 - `cancelar_cita(cita_id, estudiante_id=None)`: con `estudiante_id` solo su dueño puede cancelar (otra persona recibe `cita_no_encontrada`).
 

@@ -30,6 +30,8 @@ provisional:
   aviso: false
   p_asistencia: false
   pesos: true
+  equidad: false # R7: acordada con el equipo
+  modo_lote: false # umbral 75 % acordado con el equipo
 
 # Etiquetas en español para la API; las claves son los códigos de los datos.
 etiquetas:
@@ -48,6 +50,17 @@ etiquetas:
     digital: Videollamada
     phone: Teléfono
     in_person: Presencial
+  distrito:
+    DIST_GAIA: Gaia
+    DIST_NEBULA: Nébula
+    DIST_VECTOR: Vector
+    DIST_HORIZON: Horizon
+    DIST_QUANTUM: Quantum
+  # Línea que se agrega a la confirmación de una cita según el canal (la dirección no está en los datos: se da el distrito).
+  confirmacion_canal:
+    digital: "El servicio te enviará el enlace a tu correo institucional antes de la cita."
+    phone: "Te llamarán al número registrado."
+    in_person: "Es presencial, en {servicio} (distrito {distrito})."
   grupo:
     diurno: Diurno
     nocturno: Nocturno
@@ -60,6 +73,7 @@ etiquetas:
     alta: Alta
   dias_semana: [Lun, Mar, Mié, Jue, Vie, Sáb, Dom]
   dias_semana_largo: [lunes, martes, miércoles, jueves, viernes, sábado, domingo]
+  meses: [enero, febrero, marzo, abril, mayo, junio, julio, agosto, septiembre, octubre, noviembre, diciembre]
   pesos:
     Z1: Estudiantes sin cita
     Z2: Espera ajustada por canal
@@ -72,19 +86,18 @@ etiquetas:
     medium: media
     high: alta
     evaluation_week: una semana de evaluaciones
+  # Señales del aviso (3). La semana de evaluaciones (D7) es la CONDICIÓN para que el aviso aparezca, no una señal.
   senales:
     S1:
-      nombre: Temporada de evaluación
-      descripcion: "Hoy cae en {umbral} del calendario académico (D7)."
-    S2:
       nombre: Caída de asistencia
       descripcion: "La tasa de asistencia bajó al menos {umbral} frente al período anterior."
-    S3:
-      nombre: Caída de nota
+    S2:
+      nombre: Baja de nota
       descripcion: "El cambio de nota es menor o igual que {umbral}."
-    S4:
+    S3:
       nombre: Carga de créditos alta
       descripcion: "Los créditos están en el percentil {umbral} o más del período."
+  aviso_regla: "En semana de evaluaciones (D7), el aviso aparece con al menos {minimo} de estas {total} señales: caída de asistencia, baja de nota, carga de créditos alta."
   franja_principal: "entre {desde} y {hasta}, {dias}"
   insight: "{pct} % de los desencuentros son de {grupo} que buscan {servicio} entre las {desde} y las {hasta}."
   insight_vacio: "No hay desencuentros con estos filtros."

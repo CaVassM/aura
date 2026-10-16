@@ -6,22 +6,34 @@ export type Role = "user" | "agent";
 /** Tipos de servicio de la red (códigos de los datos). */
 export type TipoServicio = "counseling" | "peer_support" | "career_guidance";
 
-/** Una opción de cita que propone el agente (todavía no está reservada). */
+/**
+ * Una opción de cita que propone el agente (todavía no está reservada). Es un cupo concreto (`tipo_opcion: "cupo"`) o un
+ * servicio en modo lote (`"lote"`): sin día, hora ni canal, porque los decide el lote; al elegirla la solicitud queda
+ * pendiente y el resultado llega después al mismo chat.
+ */
 export interface Opcion {
   opcion_id: string;
+  tipo_opcion?: "cupo" | "lote";
   service_id: string;
   servicio_nombre: string;
   tipo: string;
   tipo_label: string;
   distrito: string;
-  fecha: string; // AAAA-MM-DD
+  fecha: string; // AAAA-MM-DD (vacío en las de lote)
   hora_inicio: string; // HH:MM
   hora_fin: string;
   canal: string; // digital | phone | in_person
   dias_espera: number;
   es_alternativa: boolean;
   afinidad: number;
+  /** Solo `lote`. */
+  cupos_libres?: number | null;
+  tiempo_respuesta_s?: number | null;
+  /** Solo `lote`: texto listo para mostrar. */
+  mensaje?: string | null;
 }
+
+export const esLote = (o: Pick<Opcion, "tipo_opcion">) => o.tipo_opcion === "lote";
 
 export interface Cita {
   id: string;
@@ -41,6 +53,8 @@ export interface Cita {
   };
   canal: string;
   estado: "confirmada" | "cancelada";
+  /** Línea de la confirmación según el canal (enlace por correo, llamada o lugar presencial). */
+  aviso_canal?: string;
 }
 
 export interface HerramientaUsada {
@@ -57,17 +71,6 @@ export interface LoteEstado {
   tamano_maximo: number;
   /** ISO UTC: cuándo se cierra solo por tiempo. */
   cierra_en: string;
-}
-
-/** Lo que se ofrece cuando todo lo compatible está en servicios en modo lote. */
-export interface LoteOferta {
-  umbral_pct: number;
-  ventana_s: number;
-  tamano_maximo: number;
-  abierto: boolean;
-  pendientes: number;
-  cierra_en: string | null;
-  servicios: string[];
 }
 
 /** Aviso en vivo para la persona (flujo /api/estudiantes/{id}/avisos/stream). */
@@ -120,7 +123,10 @@ export interface ChatRespuesta {
   cita_cancelada: Cita | null;
   desencuentro_registrado: boolean;
   lote: LoteEstado | null;
-  lote_oferta: LoteOferta | null;
+  /** Texto del backend de la última búsqueda para los casos especiales (sin cupos, lote, servicio pedido sin cupo). */
+  mensaje: string | null;
+  /** R7: ya tiene una cita activa de ese tipo de servicio; si confirma, se cambia por la nueva. */
+  ya_tiene_cita: { cita: Record<string, unknown>; mensaje: string } | null;
   lista_espera: { id: string; servicio_ideal_label: string; franjas: string } | null;
   alerta_crisis: boolean;
   herramientas_usadas: HerramientaUsada[];
@@ -144,8 +150,6 @@ export interface ChatMessage {
   listaEspera?: boolean;
   /** La persona quedó esperando en este lote. */
   lote?: LoteEstado;
-  /** Se ofrece entrar al lote (todo lo compatible está en modo lote). */
-  loteOferta?: LoteOferta;
   /** Mensaje que llegó por aviso en vivo (el lote se resolvió). */
   aviso?: AvisoEstudiante["tipo"];
   crisis?: boolean;

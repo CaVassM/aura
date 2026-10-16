@@ -255,7 +255,7 @@ class AcademicoService:
         return _redondeo(sum(p * cr for p, cr in pares) / creditos, 1) if creditos else None
 
     def indicadores_aviso(self, estudiante_id: str) -> dict:
-        """Lo que necesita el aviso proactivo (señales S1–S4): evaluación en curso, cambio de asistencia y de nota,
+        """Lo que necesita el aviso proactivo: la semana de evaluaciones en curso (la condición) y las 3 señales (cambio de asistencia y de nota,
         créditos y el corte de créditos del período. Es un cálculo de la plataforma; el agente no lo ve."""
         est = self._estudiante(estudiante_id)
         eventos = self._eventos_d7(est)

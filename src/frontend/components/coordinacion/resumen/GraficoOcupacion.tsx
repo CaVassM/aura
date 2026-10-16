@@ -16,8 +16,8 @@ export function LeyendaNiveles() {
   const texto = (nivel: (typeof NIVELES)[number]) => {
     if (!u) return NIVEL_LABEL[nivel];
     if (nivel === "baja") return `${NIVEL_LABEL[nivel]} < ${num(u.baja_menor_que)}%`;
-    if (nivel === "alta") return `${NIVEL_LABEL[nivel]} > ${num(u.alta_mayor_que)}%`;
-    return `${NIVEL_LABEL[nivel]} ${num(u.baja_menor_que)}–${num(u.alta_mayor_que)}%`;
+    if (nivel === "alta") return `${NIVEL_LABEL[nivel]} ≥ ${num(u.alta_desde)}%`;
+    return `${NIVEL_LABEL[nivel]} ${num(u.baja_menor_que)}–${num(u.alta_desde)}%`;
   };
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-co-navy">

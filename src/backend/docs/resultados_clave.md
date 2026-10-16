@@ -21,11 +21,22 @@ Los escenarios corrieron con población **50**, semillas **42–46**, generacion
 
 ## Avisos
 
+Regla: en semana de evaluaciones (D7), el aviso aparece con al menos **2 de 3 señales**: caída de asistencia, baja de nota y carga de créditos alta. La semana de evaluaciones es la condición, no una señal. D1 se usa únicamente para comparar promedios agregados entre grupos; no interviene en la selección individual.
+
 | Frase lista para usar | Fuente |
 |---|---|
-| “Con puntaje mínimo **3**, resultó elegible **12,91%** del período PER_2026_2, **8,12%** de PER_2026_3 y **13,49%** de PER_2026_4.” | [validacion_aviso.md](../salidas/validacion_aviso.md), [parametros.yaml](../config/parametros.yaml) |
-| “La ansiedad media agregada de D1 fue mayor en elegibles que en no elegibles en los tres períodos: **9,05 vs 8,00**, **9,55 vs 8,01** y **9,13 vs 7,99**.” | [validacion_aviso_d1_agregada.csv](../salidas/validacion_aviso_d1_agregada.csv) |
-| “D1 se usó solo para comparar promedios por grupo; no participa en la selección individual ni revela ansiedad por estudiante.” | [filtros.py](../aura/aviso/filtros.py), [validacion_aviso_d1_agregada.csv](../salidas/validacion_aviso_d1_agregada.csv) |
+| “Con la regla de 2 de 3 señales, resultó elegible **21,31 %** de PER_2026_2 (6.925 de 32.500), **14,80 %** de PER_2026_3 (4.809) y **21,01 %** de PER_2026_4 (6.829).” | [validacion_aviso.md](../salidas/validacion_aviso.md) |
+| “La ansiedad media agregada de D1 fue **8,12 vs. 8,14**, **8,28 vs. 8,11** y **8,15 vs. 8,14** (elegibles vs. no elegibles). El aviso no se usa para detectar ansiedad.” | [validacion_aviso.md](../salidas/validacion_aviso.md) |
+| “D1 se usó solo para comparar promedios por grupo; no participa en la selección individual ni revela ansiedad por estudiante.” | [filtros.py](../aura/aviso/filtros.py), [validacion_aviso.md](../salidas/validacion_aviso.md) |
+
+Las cifras de cobertura y validación agregada se recalcularon con `experimentos/validar_aviso.py`; ver [validacion_aviso.md](../salidas/validacion_aviso.md). La regla anterior con `dropout_alert` ya no está activa.
+
+## Demo de Coordinación
+
+| Frase lista para usar | Fuente |
+|---|---|
+| “En la demo (demanda ×6, 10 % de vespertinos que trabajan, `hoy = 2026-11-15`), AURA agenda **762 citas** con una espera media de **4,5 días**, frente a **41,96 días** observados en D2. La espera se mide como `fecha_cupo − fecha_solicitud`, igual que `wait_days` en D2.” | [como_funciona.md](como_funciona.md), `/api/coordinacion/resumen` tras reiniciar |
+| “Con umbral de modo lote de **75 %**, arrancan **3 de 15 servicios** en modo lote: Espacio Trama Orientación (79,3 %), Espacio Brújula Pares (77,1 %) y Espacio Umbral Orientación (75,0 %). Consejería de Brújula (71,1 %), Lumen (72,9 %) y Nexo (72,4 %) permite reserva directa.” | [como_funciona.md](como_funciona.md), `/api/coordinacion/lotes` tras reiniciar |
 
 ## Derivaciones D5 frente a AURA
 

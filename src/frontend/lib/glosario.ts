@@ -26,7 +26,9 @@ export type Termino =
   | "regla_afinidad"
   | "regla_aviso"
   | "regla_asistencia"
-  | "regla_pesos";
+  | "regla_pesos"
+  | "regla_equidad"
+  | "regla_lote";
 
 /** Texto del globo ⓘ. Los {marcadores} se rellenan con el contexto. */
 export const GLOSARIO: Record<Termino, string> = {
@@ -37,7 +39,7 @@ export const GLOSARIO: Record<Termino, string> = {
   ocupacion:
     "Qué parte de los cupos que los servicios prestaron a AURA ya está reservada en las próximas {semanas} semanas.",
   desencuentros:
-    "Pedidos sin ningún cupo compatible con el horario, canal o distrito del estudiante. Se registran como evidencia para decidir dónde abrir horarios.",
+    "Pedidos sin ningún cupo compatible (ni directo ni por lote) con el horario, canal o distrito del estudiante. Entrar a un lote no cuenta como desencuentro. Se registran como evidencia para decidir dónde abrir horarios.",
   atendidos_alternativa:
     "Estudiantes que recibieron un servicio relacionado porque el ideal no tenía cupo en su horario. Ej.: consejería → apoyo entre pares.",
   capacidad_semanal: "Cupos que el servicio atiende en una semana, según D6.",
@@ -49,7 +51,7 @@ export const GLOSARIO: Record<Termino, string> = {
     "La parte de los cupos libres que el servicio presta a AURA para autoagendamiento ({fraccion_liberada} %).",
   reservados: "Cupos liberados que AURA ya asignó a un estudiante.",
   nivel:
-    "Porcentaje de cupos liberados ya reservados: baja < {baja} %, media {baja}–{alta} %, alta > {alta} %.",
+    "Porcentaje de cupos liberados ya reservados: baja < {baja} %, media {baja}–{alta} %, alta desde {alta} % (el umbral del modo lote).",
   servicio_ideal:
     "El tipo de servicio que corresponde al motivo del estudiante, según la tabla de Reglas.",
   grupo: "Diurno o nocturno, según la modalidad que declara el estudiante.",
@@ -64,11 +66,15 @@ export const GLOSARIO: Record<Termino, string> = {
   regla_afinidad:
     "Qué tan parecido es un servicio a lo que la persona necesita; si el ideal no tiene cupo, solo se ofrece una alternativa con afinidad suficiente.",
   regla_aviso:
-    "Señales de la trayectoria académica que activan un aviso para el equipo de bienestar, nunca para el estudiante.",
+    "Señales de la trayectoria académica (caída de asistencia, baja de nota y carga de créditos alta) que, en semana de evaluaciones, activan un aviso opcional para el estudiante. Las señales no se le muestran.",
   regla_asistencia:
     "Probabilidad de que la persona asista según el canal; el motor prefiere canales donde se asiste más.",
   regla_pesos:
     "Cuánto pesa cada objetivo cuando el motor decide las asignaciones: cobertura, espera, equilibrio, equidad y afinidad.",
+  regla_equidad:
+    "R7: una persona no puede tener más de una cita activa por tipo de servicio; si pide otra, AURA le ofrece cambiar la que ya tiene.",
+  regla_lote:
+    "Cuando un servicio llega a este porcentaje de utilización deja de ofrecer sus cupos uno a uno: se reparten en grupo (lote) y se asignan en conjunto.",
 };
 
 /** Nombres con que se muestran los términos del embudo y otras columnas. */
@@ -110,7 +116,7 @@ export function contextoGlosario(e: EstadoDemo | null): ContextoGlosario {
     ocupacion_inicial: num(e.ocupacion_inicial_pct, 1),
     fraccion_liberada: num(e.fraccion_liberada_pct, 1),
     baja: num(e.umbrales_nivel.baja_menor_que, 0),
-    alta: num(e.umbrales_nivel.alta_mayor_que, 0),
+    alta: num(e.umbrales_nivel.alta_desde, 0),
   };
 }
 

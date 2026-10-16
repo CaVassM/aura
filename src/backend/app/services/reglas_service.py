@@ -24,11 +24,10 @@ class ReglasService:
         tipos = list(t["afinidad"])
         aviso = p["aviso"]
         umbrales = {
-            "S1": aviso["evento_evaluacion"],  # temporada de evaluación (D7); la alerta de abandono de D3 ya no es señal
-            "S2": aviso["caida_asistencia"],
-            "S3": aviso["cambio_nota"],
-            "S4": aviso["percentil_carga_creditos"],
-        }
+            "S1": aviso["caida_asistencia"],
+            "S2": aviso["cambio_nota"],
+            "S3": aviso["percentil_carga_creditos"],
+        }  # la semana de evaluaciones (D7) es la condición del aviso, no una señal
         return {
             "motivo_servicio": {
                 "provisional": prov["motivo_servicio"],
@@ -62,6 +61,8 @@ class ReglasService:
             "aviso": {
                 "provisional": prov["aviso"],
                 "puntaje_minimo": aviso["puntaje_minimo"],
+                "total_senales": len(umbrales),
+                "regla": et.aviso_regla.format(minimo=aviso["puntaje_minimo"], total=len(umbrales)),
                 "solo_semanas_evaluacion": bool(aviso.get("evento_evaluacion")),
                 "evento_evaluacion": aviso.get("evento_evaluacion"),
                 "senales": [
@@ -83,6 +84,17 @@ class ReglasService:
                     {"canal": c, "canal_label": et.canal(c), "valor": v}
                     for c, v in p["probabilidad_canal"].items()
                 ],
+            },
+            "equidad": {
+                "provisional": prov.get("equidad", False),
+                "max_citas_activas_por_tipo": int(p.get("max_citas_activas_por_tipo", 1)),
+            },
+            "modo_lote": {
+                "provisional": prov.get("modo_lote", False),
+                "umbral_pct": round(100 * float(p["modo_lote_umbral_utilizacion"]), 1),
+                "ventana_s": int(p["lote"]["ventana_segundos"]),
+                "tamano_maximo": int(p["lote"]["tamano_maximo"]),
+                "max_opciones": int(p.get("max_opciones", 3)),
             },
             "pesos": {
                 "provisional": prov["pesos"],
